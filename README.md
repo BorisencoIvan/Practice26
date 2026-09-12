@@ -15,8 +15,3 @@ Initial backend project scaffold for:
 - `reports`: sold client and aging buckets
 - `exports`: CSV/XLSX generation
 - `pdf`: PDF rendering
-
-## Run
-1. Install dependencies: `npm install`
-2. Copy environment template: `.env.example -> .env`
-3. Start: `npm run start`
