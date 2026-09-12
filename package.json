@@ -1,0 +1,20 @@
+﻿{
+  "name": "invoicing-backend",
+  "version": "1.0.0",
+  "description": "Backend for invoicing, delivery notes, numbering, and exports",
+  "type": "commonjs",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node src/app.js",
+    "test": "node --test"
+  },
+  "keywords": ["backend", "invoice", "pdf", "csv", "xlsx"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  }
+}
