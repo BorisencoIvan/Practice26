@@ -1,27 +1,26 @@
-﻿{
-    "name":  "invoicing-backend",
-    "version":  "1.0.0",
-    "description":  "Backend for invoicing, delivery notes, numbering, and exports",
-    "type":  "commonjs",
-    "main":  "src/app.js",
-    "scripts":  {
-                    "test":  "node --test",
-                    "dev":  "node src/app.js",
-                    "migrate":  "node migrations/run.js",
-                    "start":  "node src/app.js"
-                },
-    "keywords":  [
-                     "backend",
-                     "invoice",
-                     "pdf",
-                     "csv",
-                     "xlsx"
-                 ],
-    "author":  "",
-    "license":  "ISC",
-    "dependencies":  {
-                         "dotenv":  "^17.4.2",
-                         "express":  "^5.2.1",
-                         "pg":  "^8.23.0"
-                     }
+{
+    "name": "invoicing-backend",
+    "version": "1.0.0",
+    "description": "Backend for invoicing, delivery notes, numbering, and exports",
+    "type": "commonjs",
+    "main": "src/app.js",
+    "scripts": {
+        "test": "node --test",
+        "dev": "node src/app.js",
+        "migrate": "node migrations/run.js",
+        "start": "node src/app.js"
+    },
+    "keywords": [
+        "backend",
+        "invoice",
+        "pdf",
+        "csv",
+        "xlsx"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "express": "^5.2.1",
+        "pg": "^8.23.0"
+    }
 }
