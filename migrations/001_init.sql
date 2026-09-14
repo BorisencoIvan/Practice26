@@ -1,4 +1,4 @@
-﻿-- 001_init.sql - core schema for invoicing backend
+-- 001_init.sql - core schema for invoicing backend
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS routes (
