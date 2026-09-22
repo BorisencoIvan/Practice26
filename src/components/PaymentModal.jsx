@@ -181,18 +181,6 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
             {isSubmitting ? 'Сохранение...' : 'Сохранить оплату'}
           </button>
         </div>
-        
-        {/* Кнопки управления */}
-        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', cursor: 'pointer' }}>Отмена</button>
-          <button 
-            onClick={handleSave} 
-            disabled={!totalPayment || totalPayment <= 0 || remainingToAllocate < 0}
-            style={{ padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            Сохранить оплату
-          </button>
-        </div>
       </div>
     </div>
   );
