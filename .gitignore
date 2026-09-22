@@ -1,1 +1,10 @@
 ﻿
+IMPLEMENTATION_PLAN.local.md
+.env
+.env.*
+node_modules/
+*.log
+*.bak
+stderr*.txt
+stdout*.txt
+frontend-handoff.md

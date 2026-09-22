@@ -1,15 +1,126 @@
 ﻿const express = require('express');
 const { createInvoiceFromDeliveredOrder } = require('./modules/documents');
+const {
+  getDashboardSummary,
+  listClients,
+  getClientById,
+  listInvoices,
+  getInvoiceById,
+  getAgingReport
+} = require('./modules/reports');
+const { registerPayment } = require('./modules/payments');
 
 const app = express();
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (allowedOrigins.length > 0) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0]);
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
 
 app.use(express.json());
+
+const apiRouter = express.Router();
+
+apiRouter.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+apiRouter.get('/dashboard/summary', async (_req, res) => {
+  res.json(await getDashboardSummary());
+});
+
+apiRouter.get('/clients', async (_req, res) => {
+  res.json(await listClients());
+});
+
+apiRouter.get('/clients/:id', async (req, res) => {
+  const client = await getClientById(req.params.id);
+
+  if (!client) {
+    return res.status(404).json({ error: 'Client not found' });
+  }
+
+  return res.json(client);
+});
+
+apiRouter.get('/invoices', async (_req, res) => {
+  res.json(await listInvoices());
+});
+
+apiRouter.get('/invoices/:id', async (req, res) => {
+  const invoice = await getInvoiceById(req.params.id);
+
+  if (!invoice) {
+    return res.status(404).json({ error: 'Invoice not found' });
+  }
+
+  return res.json(invoice);
+});
+
+apiRouter.get('/reports/aging', async (_req, res) => {
+  res.json(await getAgingReport());
+});
+
+apiRouter.post('/payments', async (req, res) => {
+  const { invoiceId, clientId, amount, paymentMethod, reference } = req.body || {};
+
+  if (!Number.isInteger(Number(invoiceId)) || Number(invoiceId) <= 0) {
+    return res.status(422).json({ error: 'Invalid invoiceId' });
+  }
+
+  if (!Number.isInteger(Number(clientId)) || Number(clientId) <= 0) {
+    return res.status(422).json({ error: 'Invalid clientId' });
+  }
+
+  if (Number(amount) <= 0 || !Number.isFinite(Number(amount))) {
+    return res.status(422).json({ error: 'Invalid amount' });
+  }
+
+  try {
+    const payment = await registerPayment({
+      invoiceId,
+      clientId,
+      amount,
+      paymentMethod: paymentMethod || 'bank',
+      reference: reference || ''
+    });
+
+    return res.status(201).json(payment);
+  } catch (error) {
+    if (error.message === 'INVOICE_NOT_FOUND') {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.use('/api/v1', apiRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.post('/invoices/from-order/:orderId', async (req, res) => {
+async function handleCreateInvoice(req, res) {
   const orderId = Number(req.params.orderId);
   const { serie } = req.body || {};
 
@@ -35,6 +146,9 @@ app.post('/invoices/from-order/:orderId', async (req, res) => {
 
     return res.status(500).json({ error: 'Internal server error' });
   }
-});
+}
+
+app.post('/api/v1/invoices/from-order/:orderId', handleCreateInvoice);
+app.post('/invoices/from-order/:orderId', handleCreateInvoice);
 
 module.exports = { app };

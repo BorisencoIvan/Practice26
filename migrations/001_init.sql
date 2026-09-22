@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS payments (
   invoice_id INTEGER REFERENCES invoices(id) ON DELETE CASCADE,
   client_id INTEGER NOT NULL,
   amount NUMERIC(12,2) NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'bank',
+  reference TEXT,
   paid_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
