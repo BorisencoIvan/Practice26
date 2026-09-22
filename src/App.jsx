@@ -1,6 +1,7 @@
 // src/App.jsx
 import { useState } from 'react';
 import ClientsTable from './components/ClientsTable';
+import ClientDetails from './components/ClientDetails'; // Импортируем новый компонент
 
 function App() {
   const [selectedClient, setSelectedClient] = useState(null);
@@ -12,15 +13,14 @@ function App() {
       </header>
 
       <main>
-        {/* Если клиент не выбран, показываем таблицу. Если выбран - покажем детали (сделаем в следующем этапе) */}
         {!selectedClient ? (
           <ClientsTable onSelectClient={(client) => setSelectedClient(client)} />
         ) : (
-          <div style={{ padding: '20px' }}>
-            <button onClick={() => setSelectedClient(null)}>← Вернуться к списку</button>
-            <h2>Детали клиента: {selectedClient.name}</h2>
-            <p>Здесь будет список счетов и интерфейс распределения оплаты.</p>
-          </div>
+          /* Используем новый компонент ClientDetails */
+          <ClientDetails 
+            client={selectedClient} 
+            onBack={() => setSelectedClient(null)} 
+          />
         )}
       </main>
     </div>
