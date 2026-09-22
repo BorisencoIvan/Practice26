@@ -1,5 +1,5 @@
 // src/components/PaymentModal.jsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
   // 1. Состояние для общей суммы, которую принес клиент
@@ -69,7 +69,7 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
       clientId: client.id,
       totalAmount: totalPayment,
       allocations: Object.entries(allocations)
-        .filter(([_, amount]) => Number(amount) > 0)
+        .filter(([, amount]) => Number(amount) > 0)
         .map(([invId, amount]) => ({ invoiceId: Number(invId), amount: Number(amount) }))
     };
 
