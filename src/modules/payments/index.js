@@ -39,6 +39,12 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
     const invoice = invoiceResult.rows[0];
     const currentPaid = Number(invoice.paid || 0);
     const total = Number(invoice.total || 0);
+    const remaining = total - currentPaid;
+
+    if (normalizedAmount > remaining) {
+      throw new Error('PAYMENT_EXCEEDS_INVOICE_TOTAL');
+    }
+
     const nextPaid = currentPaid + normalizedAmount;
     const nextStatus = nextPaid >= total ? 'paid' : 'partially_paid';
 

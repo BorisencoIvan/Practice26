@@ -52,6 +52,26 @@ test('registerPayment updates invoice paid amount and status', async () => {
   assert.equal(client.released, true);
 });
 
+test('registerPayment rejects payment exceeding remaining invoice total', async () => {
+  const client = makeClient([
+    (sql) => (sql === 'BEGIN' ? { rowCount: 0, rows: [] } : undefined),
+    (sql) => (sql.includes('FROM invoices') ? { rowCount: 1, rows: [{ id: 15, total: '230.50', paid: '200.00', status: 'partially_paid' }] } : undefined),
+    (sql) => (sql === 'ROLLBACK' ? { rowCount: 0, rows: [] } : undefined)
+  ]);
+
+  setDbClient(client);
+  delete require.cache[require.resolve('../src/modules/payments')];
+
+  const { registerPayment } = require('../src/modules/payments');
+
+  await assert.rejects(
+    () => registerPayment({ invoiceId: 15, clientId: 11, amount: 40, paymentMethod: 'bank', reference: 'REF-2' }),
+    (error) => error.message === 'PAYMENT_EXCEEDS_INVOICE_TOTAL'
+  );
+
+  assert.equal(client.released, true);
+});
+
 test('dashboard summary fallback exposes compatible contract for frontend', async () => {
   delete require.cache[require.resolve('../src/modules/reports')];
 

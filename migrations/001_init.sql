@@ -1,6 +1,16 @@
 -- 001_init.sql - core schema for invoicing backend
 BEGIN;
 
+CREATE TABLE IF NOT EXISTS clients (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  company_name TEXT,
+  email TEXT,
+  phone TEXT,
+  tax_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS routes (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -10,7 +20,7 @@ CREATE TABLE IF NOT EXISTS routes (
 CREATE TABLE IF NOT EXISTS orders (
   id SERIAL PRIMARY KEY,
   external_id TEXT,
-  client_id INTEGER NOT NULL,
+  client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
   route_id INTEGER REFERENCES routes(id),
   delivered_at TIMESTAMP WITH TIME ZONE,
   total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -31,12 +41,12 @@ CREATE TABLE IF NOT EXISTS invoices (
   serie TEXT NOT NULL,
   number BIGINT NOT NULL,
   order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
-  client_id INTEGER NOT NULL,
+  client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
   issued_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   due_at TIMESTAMP WITH TIME ZONE,
   total NUMERIC(12,2) NOT NULL DEFAULT 0,
   paid NUMERIC(12,2) NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'issued',
+  status TEXT NOT NULL DEFAULT 'issued' CHECK (status IN ('issued', 'partially_paid', 'paid', 'cancelled')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   UNIQUE (serie, number)
 );
@@ -54,7 +64,7 @@ CREATE TABLE IF NOT EXISTS delivery_notes (
 CREATE TABLE IF NOT EXISTS payments (
   id SERIAL PRIMARY KEY,
   invoice_id INTEGER REFERENCES invoices(id) ON DELETE CASCADE,
-  client_id INTEGER NOT NULL,
+  client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
   amount NUMERIC(12,2) NOT NULL,
   payment_method TEXT NOT NULL DEFAULT 'bank',
   reference TEXT,

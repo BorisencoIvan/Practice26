@@ -146,6 +146,10 @@ apiRouter.post('/payments', async (req, res) => {
       return res.status(404).json({ error: 'Invoice not found' });
     }
 
+    if (error.message === 'PAYMENT_EXCEEDS_INVOICE_TOTAL') {
+      return res.status(422).json({ error: 'Payment exceeds remaining invoice total' });
+    }
+
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

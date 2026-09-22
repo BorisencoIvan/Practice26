@@ -45,6 +45,10 @@ const fallbackTopProducts = [
   { name: 'Клей для плитки 25кг', value: 38 }
 ];
 
+function toFixed2(value) {
+  return Number(value || 0).toFixed(2);
+}
+
 function buildFallbackSalesSeries(days = 30) {
   const today = new Date();
   const series = [];
@@ -65,10 +69,6 @@ function buildFallbackSalesSeries(days = 30) {
   return series;
 }
 
-function toFixed2(value) {
-  return Number(value || 0).toFixed(2);
-}
-
 async function fetchDashboardFromDb() {
   const client = await db.getClient();
 
@@ -76,16 +76,19 @@ async function fetchDashboardFromDb() {
     const summaryRes = await client.query(`
       SELECT
         COALESCE(SUM(CASE WHEN issued_at >= NOW() - INTERVAL '30 days' THEN total ELSE 0 END), 0) AS month_sales,
-        COALESCE(SUM(CASE WHEN status IN ('issued', 'partially_paid') THEN total - paid ELSE 0 END), 0) AS outstanding,
-        COUNT(CASE WHEN status = 'issued' THEN 1 END) AS open_invoices,
-        COUNT(CASE WHEN status = 'partially_paid' THEN 1 END) AS partial_invoices
+        COALESCE(SUM(CASE WHEN status IN ('issued', 'partially_paid') THEN GREATEST(total - paid, 0) ELSE 0 END), 0) AS outstanding,
+        COUNT(*) FILTER (WHERE status = 'issued') AS open_invoices,
+        COUNT(*) FILTER (WHERE status = 'partially_paid') AS partial_invoices,
+        COALESCE(SUM(CASE WHEN issued_at >= NOW() - INTERVAL '1 day' THEN total ELSE 0 END), 0) AS today_sales
       FROM invoices
     `);
 
-    const totalReceivable = Number(summaryRes.rows[0].outstanding || 0);
-    const monthSales = Number(summaryRes.rows[0].month_sales || 0);
-    const openInvoices = Number(summaryRes.rows[0].open_invoices || 0);
-    const partialInvoices = Number(summaryRes.rows[0].partial_invoices || 0);
+    const summaryRow = summaryRes.rows[0] || {};
+    const totalReceivable = Number(summaryRow.outstanding || 0);
+    const monthSales = Number(summaryRow.month_sales || 0);
+    const openInvoices = Number(summaryRow.open_invoices || 0);
+    const partialInvoices = Number(summaryRow.partial_invoices || 0);
+    const todaySales = Number(summaryRow.today_sales || 0);
 
     const seriesRes = await client.query(`
       SELECT
@@ -99,7 +102,7 @@ async function fetchDashboardFromDb() {
 
     return {
       summary: {
-        todaySales: toFixed2(totalReceivable),
+        todaySales: toFixed2(todaySales),
         monthSales: toFixed2(monthSales),
         pendingOrders: openInvoices + partialInvoices,
         activeRoutes: 12,
@@ -117,7 +120,7 @@ async function fetchDashboardFromDb() {
         ]
       }
     };
-  } catch (error) {
+  } catch (_error) {
     return null;
   } finally {
     client.release();
@@ -131,7 +134,7 @@ async function getDashboardSummary() {
       return realSummary;
     }
   } catch (_error) {
-    // ignore and fallback to compatible demo data
+    // fallback below
   }
 
   const salesSeries = buildFallbackSalesSeries(30);
@@ -160,97 +163,267 @@ async function getDashboardSummary() {
 }
 
 async function listClients() {
-  try {
-    const client = await db.getClient();
-    try {
-      const result = await client.query(`
-        SELECT id, client_id AS client_id, COUNT(*)::int AS invoices_count, COALESCE(SUM(total), 0)::numeric(12,2) AS total_invoiced,
-               COALESCE(SUM(CASE WHEN paid >= total THEN total ELSE 0 END), 0)::numeric(12,2) AS paid_total,
-               COALESCE(SUM(CASE WHEN paid < total THEN total - paid ELSE 0 END), 0)::numeric(12,2) AS balance
-        FROM invoices
-        GROUP BY id, client_id
-      `);
+  const client = await db.getClient();
 
-      return result.rows.map((row) => ({
-        id: Number(row.client_id),
-        name: `Client ${row.client_id}`,
-        balance: Number(row.balance),
-        maxDebtAge: 15
-      }));
-    } finally {
-      client.release();
-    }
+  try {
+    const result = await client.query(`
+      SELECT
+        c.id,
+        c.name,
+        COALESCE(SUM(i.total - i.paid), 0)::numeric(12,2) AS balance,
+        COALESCE(MAX(CASE
+          WHEN i.due_at IS NOT NULL THEN DATE_PART('day', NOW() - i.due_at)
+          ELSE 0
+        END), 0)::int AS maxDebtAge
+      FROM clients c
+      LEFT JOIN invoices i ON i.client_id = c.id
+      GROUP BY c.id, c.name
+      ORDER BY c.name ASC
+    `);
+
+    return result.rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      balance: Number(row.balance),
+      maxDebtAge: Number(row.maxdebtage || 0)
+    }));
   } catch (_error) {
     return fallbackClientsData;
+  } finally {
+    client.release();
   }
 }
 
 async function getClientById(clientId) {
-  const clients = await listClients();
-  const client = clients.find((entry) => entry.id === Number(clientId));
+  const client = await db.getClient();
 
-  if (!client) {
-    return null;
+  try {
+    const clientResult = await client.query(`
+      SELECT c.id, c.name, c.company_name, c.email, c.phone, c.tax_id,
+             COALESCE(SUM(i.total - i.paid), 0)::numeric(12,2) AS balance,
+             COALESCE(MAX(CASE WHEN i.due_at IS NOT NULL THEN DATE_PART('day', NOW() - i.due_at) ELSE 0 END), 0)::int AS maxDebtAge
+      FROM clients c
+      LEFT JOIN invoices i ON i.client_id = c.id
+      WHERE c.id = $1
+      GROUP BY c.id, c.name, c.company_name, c.email, c.phone, c.tax_id
+    `, [Number(clientId)]);
+
+    if (clientResult.rowCount === 0) {
+      return null;
+    }
+
+    const clientRow = clientResult.rows[0];
+    const invoiceResult = await client.query(`
+      SELECT id, serie, number, total, paid, status, due_at
+      FROM invoices
+      WHERE client_id = $1
+      ORDER BY due_at DESC NULLS LAST
+    `, [Number(clientId)]);
+
+    const paymentResult = await client.query(`
+      SELECT id, amount, paid_at AS date, reference AS receiptNumber
+      FROM payments
+      WHERE client_id = $1
+      ORDER BY paid_at DESC
+    `, [Number(clientId)]);
+
+    return {
+      id: Number(clientRow.id),
+      name: clientRow.name,
+      company_name: clientRow.company_name,
+      email: clientRow.email,
+      phone: clientRow.phone,
+      tax_id: clientRow.tax_id,
+      balance: Number(clientRow.balance || 0),
+      maxDebtAge: Number(clientRow.maxdebtage || 0),
+      invoices: invoiceResult.rows.map((row) => ({
+        id: Number(row.id),
+        clientId: Number(clientId),
+        serie: row.serie,
+        number: Number(row.number),
+        total: Number(row.total),
+        paid: Number(row.paid),
+        due_at: row.due_at ? new Date(row.due_at).toISOString() : null,
+        status: row.status
+      })),
+      paymentHistory: paymentResult.rows.map((row) => ({
+        id: Number(row.id),
+        clientId: Number(clientId),
+        amount: Number(row.amount),
+        date: row.date ? new Date(row.date).toISOString() : null,
+        receiptNumber: row.receiptnumber
+      }))
+    };
+  } catch (_error) {
+    const fallbackClient = fallbackClientsData.find((entry) => entry.id === Number(clientId));
+    if (!fallbackClient) {
+      return null;
+    }
+
+    return {
+      ...fallbackClient,
+      invoices: fallbackClientInvoices.filter((invoice) => invoice.clientId === Number(clientId)),
+      paymentHistory: fallbackPaymentHistoryData.filter((payment) => payment.clientId === Number(clientId))
+    };
+  } finally {
+    client.release();
   }
-
-  return {
-    ...client,
-    invoices: fallbackClientInvoices.filter((invoice) => invoice.clientId === Number(clientId)),
-    paymentHistory: fallbackPaymentHistoryData.filter((payment) => payment.clientId === Number(clientId))
-  };
 }
 
 async function listInvoices() {
-  return [
-    { id: 1, number: 'INV-101', pdfUrl: '/sample.pdf' },
-    { id: 2, number: 'INV-102', pdfUrl: '/sample.pdf' }
-  ];
+  const client = await db.getClient();
+
+  try {
+    const result = await client.query(`
+      SELECT id, serie, number, client_id, total, paid, status, due_at
+      FROM invoices
+      ORDER BY issued_at DESC
+    `);
+
+    return result.rows.map((row) => ({
+      id: Number(row.id),
+      number: `${row.serie}-${row.number}`,
+      pdfUrl: `/api/v1/invoices/${row.id}/pdf`,
+      status: row.status,
+      total: Number(row.total),
+      paid: Number(row.paid)
+    }));
+  } catch (_error) {
+    return [
+      { id: 1, number: 'INV-101', pdfUrl: '/sample.pdf' },
+      { id: 2, number: 'INV-102', pdfUrl: '/sample.pdf' }
+    ];
+  } finally {
+    client.release();
+  }
 }
 
 async function getInvoiceById(invoiceId) {
-  const safeId = Number(invoiceId);
+  const client = await db.getClient();
 
-  return {
-    id: safeId,
-    serie: 'INV',
-    number: 101,
-    order_id: 7,
-    client_id: 11,
-    issued_at: '2026-09-21T18:00:00.000Z',
-    due_at: '2026-10-21T18:00:00.000Z',
-    total: '230.50',
-    paid: '0.00',
-    status: 'issued',
-    client: {
-      name: 'ИП Иванов В.М.',
-      fiscalCode: '1008600098765',
-      deliveryAddress: 'г. Кишинёв, ул. Алба-Юлия 10/2'
-    },
-    items: [
-      {
-        name: 'Питьевая вода 5L',
-        unit: 'шт',
-        qty: 10,
-        priceWithoutVat: 15.0,
-        vatRate: 20
-      }
-    ]
-  };
+  try {
+    const result = await client.query(`
+      SELECT i.id, i.serie, i.number, i.order_id, i.client_id, i.issued_at, i.due_at, i.total, i.paid, i.status,
+             c.name AS client_name, c.company_name, c.tax_id
+      FROM invoices i
+      LEFT JOIN clients c ON c.id = i.client_id
+      WHERE i.id = $1
+    `, [Number(invoiceId)]);
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+
+    const invoice = result.rows[0];
+    return {
+      id: Number(invoice.id),
+      serie: invoice.serie,
+      number: Number(invoice.number),
+      order_id: Number(invoice.order_id),
+      client_id: Number(invoice.client_id),
+      issued_at: invoice.issued_at ? new Date(invoice.issued_at).toISOString() : null,
+      due_at: invoice.due_at ? new Date(invoice.due_at).toISOString() : null,
+      total: toFixed2(invoice.total),
+      paid: toFixed2(invoice.paid),
+      status: invoice.status,
+      client: {
+        name: invoice.client_name,
+        companyName: invoice.company_name,
+        fiscalCode: invoice.tax_id,
+        deliveryAddress: 'Реальный адрес клиента'
+      },
+      items: []
+    };
+  } catch (_error) {
+    const safeId = Number(invoiceId);
+    return {
+      id: safeId,
+      serie: 'INV',
+      number: 101,
+      order_id: 7,
+      client_id: 11,
+      issued_at: '2026-09-21T18:00:00.000Z',
+      due_at: '2026-10-21T18:00:00.000Z',
+      total: '230.50',
+      paid: '0.00',
+      status: 'issued',
+      client: {
+        name: 'ИП Иванов В.М.',
+        fiscalCode: '1008600098765',
+        deliveryAddress: 'г. Кишинёв, ул. Алба-Юлия 10/2'
+      },
+      items: []
+    };
+  } finally {
+    client.release();
+  }
 }
 
 async function getAgingReport() {
-  return {
-    buckets: [
-      { label: '0-30 дней', total: '45000.00' },
-      { label: '31-60 дней', total: '32000.00' },
-      { label: '>60 дней', total: '43500.00' }
-    ],
-    overdueInvoices: [
-      { no: 'FCT-2231', client: 'Nord Distribuție', value: '22100.00', agingDays: 74 },
-      { no: 'FCT-2214', client: 'Prim Construct', value: '15600.00', agingDays: 51 },
-      { no: 'FCT-2198', client: 'EuroLogistic', value: '9800.00', agingDays: 38 }
-    ]
-  };
+  const client = await db.getClient();
+
+  try {
+    const result = await client.query(`
+      SELECT
+        CASE
+          WHEN NOW() - due_at <= INTERVAL '30 days' THEN '0-30 дней'
+          WHEN NOW() - due_at <= INTERVAL '60 days' THEN '31-60 дней'
+          ELSE '>60 дней'
+        END AS bucket,
+        COALESCE(SUM(GREATEST(total - paid, 0)), 0)::numeric(12,2) AS total
+      FROM invoices
+      WHERE status IN ('issued', 'partially_paid') AND due_at IS NOT NULL
+      GROUP BY CASE
+        WHEN NOW() - due_at <= INTERVAL '30 days' THEN '0-30 дней'
+        WHEN NOW() - due_at <= INTERVAL '60 days' THEN '31-60 дней'
+        ELSE '>60 дней'
+      END
+    `);
+
+    const buckets = (result.rows || []).map((row) => ({
+      label: row.bucket,
+      total: toFixed2(row.total)
+    }));
+
+    const overdueInvoices = await client.query(`
+      SELECT i.id, c.name AS client, i.total - i.paid AS value, i.due_at,
+             DATE_PART('day', NOW() - i.due_at) AS agingDays
+      FROM invoices i
+      JOIN clients c ON c.id = i.client_id
+      WHERE i.status IN ('issued', 'partially_paid')
+      ORDER BY i.due_at ASC
+      LIMIT 10
+    `);
+
+    return {
+      buckets: buckets.length ? buckets : [
+        { label: '0-30 дней', total: '0.00' },
+        { label: '31-60 дней', total: '0.00' },
+        { label: '>60 дней', total: '0.00' }
+      ],
+      overdueInvoices: overdueInvoices.rows.map((row) => ({
+        no: `INV-${row.id}`,
+        client: row.client,
+        value: toFixed2(row.value),
+        agingDays: Number(row.agingdays || 0)
+      }))
+    };
+  } catch (_error) {
+    return {
+      buckets: [
+        { label: '0-30 дней', total: '45000.00' },
+        { label: '31-60 дней', total: '32000.00' },
+        { label: '>60 дней', total: '43500.00' }
+      ],
+      overdueInvoices: [
+        { no: 'FCT-2231', client: 'Nord Distribuție', value: '22100.00', agingDays: 74 },
+        { no: 'FCT-2214', client: 'Prim Construct', value: '15600.00', agingDays: 51 },
+        { no: 'FCT-2198', client: 'EuroLogistic', value: '9800.00', agingDays: 38 }
+      ]
+    };
+  } finally {
+    client.release();
+  }
 }
 
 function getReportsModuleInfo() {
