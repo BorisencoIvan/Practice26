@@ -103,16 +103,20 @@ export const InvoiceTemplate = ({ invoiceData, supplierInfo }) => {
           </thead>
           <tbody>
             {calculatedItems.map((item, index) => (
-              <tr key={index}>
+                <tr key={index}>
                 <td>{index + 1}</td>
                 <td>{item.name}</td>
                 <td>{item.unit || 'шт'}</td>
                 <td>{item.qty}</td>
-                <td>{item.priceWithoutVat.toFixed(2)} MDL</td>
+
+                <td>{(Number(item.priceWithoutVat) || 0).toFixed(2)} MDL</td>
+
                 <td>{item.vatRate}%</td>
-                <td>{item.vatAmount.toFixed(2)} MDL</td>
-                <td>{item.totalItemSum.toFixed(2)} MDL</td>
-              </tr>
+
+                <td>{(Number(item.vatAmount) || 0).toFixed(2)} MDL</td>
+
+                <td>{(Number(item.totalItemSum) || 0).toFixed(2)} MDL</td>
+                 </tr>
             ))}
           </tbody>
         </table>
