@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
   // 1. Состояние для общей суммы, которую принес клиент
   const [totalPayment, setTotalPayment] = useState('');
+  const [apiError, setApiError] = useState(null); // Состояние для хранения ошибки от Максима
+  const [isSubmitting, setIsSubmitting] = useState(false); // Чтобы блокировать кнопку при загрузке
   
   // 2. Состояние для хранения того, сколько денег мы распределили на каждый счет
   // Формат: { invoiceId1: сумма, invoiceId2: сумма }
@@ -54,13 +56,15 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
   };
 
   // 6. Отправка данных (сохранение оплаты)
-  const handleSave = () => {
+  const handleSave = async () => {
     if (remainingToAllocate < 0) {
-      alert("Ошибка: Вы распределили больше денег, чем принес клиент!");
+      setApiError("Вы распределили больше денег, чем принес клиент!");
       return;
     }
     
-    // Формируем данные для бэкенда (для Максима)
+    setApiError(null);
+    setIsSubmitting(true);
+
     const paymentData = {
       clientId: client.id,
       totalAmount: totalPayment,
@@ -69,7 +73,34 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
         .map(([invId, amount]) => ({ invoiceId: Number(invId), amount: Number(amount) }))
     };
 
-    onSubmit(paymentData);
+    try {
+      // ВРЕМЕННАЯ ЗАГЛУШКА: Имитируем запрос к серверу (удали setTimeout потом)
+      // Когда Максим даст URL, раскомментируй код ниже (fetch...)
+      
+      /*
+      const response = await fetch('/api/v1/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paymentData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        // Перехватываем ошибку 409 или любую другую, как просил Максим в файле handoff
+        throw new Error(errorData.error || 'Произошла неизвестная ошибка сервера');
+      }
+      */
+
+      // Имитация успешного ответа
+      setTimeout(() => {
+        setIsSubmitting(false);
+        onSubmit(paymentData); 
+      }, 1000);
+
+    } catch (err) {
+      setIsSubmitting(false);
+      setApiError(err.message); // Выведет текст ошибки на экран
+    }
   };
 
   return (
@@ -132,6 +163,25 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
           );
         })}
 
+        {/* Вывод ошибки от сервера */}
+        {apiError && (
+          <div style={{ color: 'red', marginTop: '15px', fontWeight: 'bold' }}>
+            Ошибка: {apiError}
+          </div>
+        )}
+
+        {/* Кнопки управления */}
+        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button onClick={onClose} disabled={isSubmitting} style={{ padding: '10px 20px', cursor: 'pointer' }}>Отмена</button>
+          <button 
+            onClick={handleSave} 
+            disabled={!totalPayment || totalPayment <= 0 || remainingToAllocate < 0 || isSubmitting}
+            style={{ padding: '10px 20px', backgroundColor: isSubmitting ? '#999' : '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            {isSubmitting ? 'Сохранение...' : 'Сохранить оплату'}
+          </button>
+        </div>
+        
         {/* Кнопки управления */}
         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button onClick={onClose} style={{ padding: '10px 20px', cursor: 'pointer' }}>Отмена</button>

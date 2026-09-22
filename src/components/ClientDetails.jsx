@@ -1,20 +1,19 @@
 // src/components/ClientDetails.jsx
 import { useState } from 'react';
-import { clientInvoices } from '../mockData';
-import PaymentModal from './PaymentModal'; // <--- Импортируем модальное окно
+import { clientInvoices, paymentHistoryData } from '../mockData';
+import PaymentModal from './PaymentModal';
 
 export default function ClientDetails({ client, onBack }) {
   const invoices = clientInvoices.filter(inv => inv.clientId === client.id);
+  // Фильтруем историю платежей для конкретного клиента
+  const history = paymentHistoryData.filter(pay => pay.clientId === client.id);
+  
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // Функция, которая сработает, когда кассир нажмет "Сохранить оплату"
-  const handlePaymentSubmit = (paymentData) => {
-    console.log("Данные для отправки Максиму (Backend):", paymentData);
-    
-    // Имитируем успешное сохранение
-    alert(`Успех! Оплата на сумму ${paymentData.totalAmount} MDL распределена.\nПосмотри консоль (F12) для деталей.`);
-    
-    // Закрываем окно
+  const handlePaymentSubmit = async (paymentData) => {
+    // Пока сервер не готов, просто выводим в консоль и закрываем
+    console.log("Отправляем на сервер:", paymentData);
+    alert("Оплата успешно сохранена (имитация)!");
     setIsPaymentModalOpen(false);
   };
 
@@ -41,9 +40,10 @@ export default function ClientDetails({ client, onBack }) {
         </div>
       </div>
 
+      {/* Блок 1: Неоплаченные счета */}
       <h3>Неоплаченные счета (Facturi neachitate)</h3>
       {invoices.length > 0 ? (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '40px' }}>
           <thead>
             <tr style={{ backgroundColor: '#f4f4f4', borderBottom: '2px solid #ddd' }}>
               <th style={{ padding: '10px' }}>Документ</th>
@@ -66,10 +66,34 @@ export default function ClientDetails({ client, onBack }) {
           </tbody>
         </table>
       ) : (
-        <p style={{ color: '#666' }}>У этого клиента нет неоплаченных счетов.</p>
+        <p style={{ color: '#666', marginBottom: '40px' }}>У этого клиента нет неоплаченных счетов.</p>
       )}
 
-      {/* Вызываем компонент распределения оплаты, передаем ему данные */}
+      {/* Блок 2: История платежей (НОВОЕ) */}
+      <h3>История платежей (Istoric de plăți)</h3>
+      {history.length > 0 ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f4f4f4', borderBottom: '2px solid #ddd' }}>
+              <th style={{ padding: '10px' }}>Номер квитанции</th>
+              <th style={{ padding: '10px' }}>Сумма оплаты</th>
+              <th style={{ padding: '10px' }}>Дата и время</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((pay) => (
+              <tr key={pay.id} style={{ borderBottom: '1px solid #ddd' }}>
+                <td style={{ padding: '10px' }}>{pay.receiptNumber}</td>
+                <td style={{ padding: '10px', color: 'green', fontWeight: 'bold' }}>+{pay.amount} MDL</td>
+                <td style={{ padding: '10px' }}>{new Date(pay.date).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ color: '#666' }}>История платежей пуста.</p>
+      )}
+
       {isPaymentModalOpen && (
         <PaymentModal 
           client={client}
