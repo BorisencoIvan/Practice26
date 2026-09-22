@@ -1,122 +1,42 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+// src/App.jsx
+import React from 'react';
+import { InvoiceTemplate } from './components/Documents/InvoiceTemplate';
 
-function App() {
-  const [count, setCount] = useState(0)
+const mockSupplier = {
+  name: 'SRL "Distribuție Rapidă"',
+  fiscalCode: '1003600012345',
+  address: 'г. Кишинёв, ул. Штефан чел Маре 130',
+  bankName: 'MAIB S.A.',
+  bankAccount: 'MD24AG00000002251111111'
+};
 
+const mockInvoiceData = {
+  id: 15,
+  serie: 'INV',
+  number: 101,
+  order_id: 7,
+  client_id: 11,
+  issued_at: '2026-09-21T18:00:00.000Z',
+  due_at: '2026-10-21T18:00:00.000Z',
+  total: '230.50',
+  client: {
+    name: 'ИП Иванов В.М.',
+    fiscalCode: '1008600098765',
+    deliveryAddress: 'г. Кишинёв, ул. Алба-Юлия 10/2'
+  },
+  items: [
+    { name: 'Питьевая вода 5L', unit: 'шт', qty: 10, priceWithoutVat: 15.00, vatRate: 20 },
+    { name: 'Сок яблочный 1L', unit: 'шт', qty: 5, priceWithoutVat: 10.10, vatRate: 20 }
+  ]
+};
+
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <div>
+      <InvoiceTemplate 
+        invoiceData={mockInvoiceData} 
+        supplierInfo={mockSupplier} 
+      />
+    </div>
+  );
 }
-
-export default App
