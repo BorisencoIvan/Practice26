@@ -9,6 +9,8 @@ const {
   getAgingReport
 } = require('./modules/reports');
 const { registerPayment } = require('./modules/payments');
+const { generateInvoicePdf } = require('./modules/pdf');
+const { buildReportCsv, buildReportXlsx } = require('./modules/exports');
 
 const app = express();
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000')
@@ -78,6 +80,40 @@ apiRouter.get('/invoices/:id', async (req, res) => {
 
 apiRouter.get('/reports/aging', async (_req, res) => {
   res.json(await getAgingReport());
+});
+
+apiRouter.get('/invoices/:id/pdf', async (req, res) => {
+  try {
+    const buffer = await generateInvoicePdf(req.params.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${req.params.id}.pdf"`);
+    return res.send(buffer);
+  } catch (error) {
+    if (error.message === 'INVOICE_NOT_FOUND') {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+apiRouter.get('/exports/report.csv', async (req, res) => {
+  const csv = await buildReportCsv({
+    from: req.query.from,
+    to: req.query.to
+  });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="aging-report.csv"');
+  return res.send(csv);
+});
+
+apiRouter.get('/exports/report.xlsx', async (req, res) => {
+  const workbookBuffer = await buildReportXlsx({
+    from: req.query.from,
+    to: req.query.to
+  });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="aging-report.xlsx"');
+  return res.send(workbookBuffer);
 });
 
 apiRouter.post('/payments', async (req, res) => {
