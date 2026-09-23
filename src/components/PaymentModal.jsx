@@ -2,93 +2,86 @@
 import { useState } from 'react';
 
 export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
-  // 1. Состояние для общей суммы, которую принес клиент
   const [totalPayment, setTotalPayment] = useState('');
-  const [apiError, setApiError] = useState(null); // Состояние для хранения ошибки от Максима
-  const [isSubmitting, setIsSubmitting] = useState(false); // Чтобы блокировать кнопку при загрузке
-  
-  // 2. Состояние для хранения того, сколько денег мы распределили на каждый счет
-  // Формат: { invoiceId1: сумма, invoiceId2: сумма }
+  const [apiError, setApiError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [allocations, setAllocations] = useState({});
 
-  // 3. Высчитываем, сколько денег "осталось" распределить
   const allocatedSum = Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0);
   const remainingToAllocate = (Number(totalPayment) || 0) - allocatedSum;
 
-  // 4. Функция для "Автораспределения" (Кнопка, чтобы не вписывать руками)
-  // Она берет общую сумму и раскидывает её по счетам от самых старых к новым
+  const getInvoiceId = (inv) => inv.invoiceId ?? inv.id;
+
   const handleAutoAllocate = () => {
     let currentRemaining = Number(totalPayment) || 0;
     const newAllocations = {};
-
-    // Сортируем счета по дате (сначала старые)
     const sortedInvoices = [...invoices].sort((a, b) => new Date(a.due_at) - new Date(b.due_at));
 
     sortedInvoices.forEach(inv => {
-      const debt = inv.total - inv.paid; // Сколько должны по этому счету
+      const invId = getInvoiceId(inv);
+      const debt = inv.total - inv.paid;
       if (currentRemaining > 0 && debt > 0) {
-        // Берем минимум: либо весь долг по счету, либо то, что осталось от общей суммы
         const amountToPay = Math.min(debt, currentRemaining);
-        newAllocations[inv.id] = amountToPay;
+        newAllocations[invId] = amountToPay;
         currentRemaining -= amountToPay;
       } else {
-        newAllocations[inv.id] = 0;
+        newAllocations[invId] = 0;
       }
     });
 
     setAllocations(newAllocations);
   };
 
-  // 5. Функция ручного ввода суммы в конкретный счет
-  const handleAllocationChange = (invoiceId, value, maxDebt) => {
+  const handleAllocationChange = (invId, value, maxDebt) => {
     let numValue = Number(value);
-    
-    // Нельзя заплатить отрицательную сумму
     if (numValue < 0) numValue = 0;
-    
-    // Нельзя заплатить по счету больше, чем сам долг
     if (numValue > maxDebt) numValue = maxDebt;
 
     setAllocations({
       ...allocations,
-      [invoiceId]: numValue === 0 ? '' : numValue // Если 0, оставляем пустое поле для красоты
+      [invId]: numValue === 0 ? '' : numValue
     });
   };
 
-  // 6. Отправка данных (сохранение оплаты)
   const handleSave = async () => {
-    if (remainingToAllocate < 0) {
-      setApiError("Вы распределили больше денег, чем принес клиент!");
+    if (remainingToAllocate !== 0) {
+      setApiError("Распределите всю сумму по счетам перед сохранением!");
       return;
     }
     
     setApiError(null);
     setIsSubmitting(true);
 
-    const paymentData = {
-      clientId: client.id,
-      totalAmount: totalPayment,
-      allocations: Object.entries(allocations)
-        .filter(([, amount]) => Number(amount) > 0)
-        .map(([invId, amount]) => ({ invoiceId: Number(invId), amount: Number(amount) }))
-    };
-
+    const paymentsToSend = Object.entries(allocations)
+      .filter(([, amount]) => Number(amount) > 0)
+      .map(([invId, amount]) => ({
+        clientId: Number(client.id || client.clientId), // Добавлена эта строка
+        invoiceId: Number(invId),
+        amount: Number(amount),
+        paymentMethod: "bank", 
+        reference: "Оплата через Back-Office" 
+      }));
+      
     try {
-      // Реальный запрос к серверу Максима
-      const response = await fetch('/api/v1/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(paymentData)
-      });
+      // 2. Отправляем отдельный POST-запрос для КАЖДОГО счета параллельно
+      await Promise.all(
+        paymentsToSend.map(payment =>
+          fetch('/api/v1/payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payment) // Отправляем ровно ту структуру, которую просит Максим
+          }).then(async (res) => {
+            if (!res.ok) {
+              const errorData = await res.json();
+              throw new Error(errorData.error || `Ошибка сервера при оплате счета ID: ${payment.invoiceId}`);
+            }
+          })
+        )
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        // Перехватываем ошибку 409 или любую другую
-        throw new Error(errorData.error || 'Произошла неизвестная ошибка сервера');
-      }
-
+      // Если все запросы прошли успешно:
       setIsSubmitting(false);
-      onSubmit(); // Сообщаем ClientDetails, что нужно обновить данные
+      onSubmit(); 
       
     } catch (err) {
       setIsSubmitting(false);
@@ -104,7 +97,6 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
       <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', width: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h2>Регистрация оплаты: {client.name}</h2>
         
-        {/* Блок ввода общей суммы */}
         <div style={{ backgroundColor: '#eef', padding: '15px', borderRadius: '5px', marginBottom: '20px' }}>
           <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>
             Общая сумма к распределению (MDL):
@@ -117,7 +109,7 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
             style={{ padding: '8px', width: '200px', fontSize: '16px' }}
           />
           <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: remainingToAllocate < 0 ? 'red' : 'green', fontWeight: 'bold' }}>
+            <span style={{ color: remainingToAllocate === 0 && totalPayment > 0 ? 'green' : 'red', fontWeight: 'bold' }}>
               Остаток для распределения: {remainingToAllocate} MDL
             </span>
             <button 
@@ -125,19 +117,19 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
               disabled={!totalPayment || totalPayment <= 0}
               style={{ padding: '5px 10px', cursor: 'pointer' }}
             >
-              Авто-распределение (старые счета)
+              Авто-распределение
             </button>
           </div>
         </div>
 
-        {/* Список счетов для распределения */}
         <h4>Распределение по счетам:</h4>
         {invoices.map(inv => {
+          const invId = getInvoiceId(inv);
           const debt = inv.total - inv.paid;
-          const currentAlloc = allocations[inv.id] || '';
+          const currentAlloc = allocations[invId] || '';
           
           return (
-            <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #ccc' }}>
+            <div key={invId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #ccc' }}>
               <div>
                 <strong>{inv.serie}-{inv.number}</strong> (Долг: {debt} MDL)
                 <br/>
@@ -147,7 +139,7 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
                 <input 
                   type="number" 
                   value={currentAlloc}
-                  onChange={(e) => handleAllocationChange(inv.id, e.target.value, debt)}
+                  onChange={(e) => handleAllocationChange(invId, e.target.value, debt)}
                   placeholder="0"
                   style={{ padding: '5px', width: '100px', textAlign: 'right' }}
                 /> MDL
@@ -156,20 +148,22 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
           );
         })}
 
-        {/* Вывод ошибки от сервера */}
         {apiError && (
           <div style={{ color: 'red', marginTop: '15px', fontWeight: 'bold' }}>
             Ошибка: {apiError}
           </div>
         )}
 
-        {/* Кнопки управления */}
         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button onClick={onClose} disabled={isSubmitting} style={{ padding: '10px 20px', cursor: 'pointer' }}>Отмена</button>
           <button 
             onClick={handleSave} 
-            disabled={!totalPayment || totalPayment <= 0 || remainingToAllocate < 0 || isSubmitting}
-            style={{ padding: '10px 20px', backgroundColor: isSubmitting ? '#999' : '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            disabled={!totalPayment || totalPayment <= 0 || remainingToAllocate !== 0 || isSubmitting}
+            style={{ 
+              padding: '10px 20px', 
+              backgroundColor: (!totalPayment || totalPayment <= 0 || remainingToAllocate !== 0 || isSubmitting) ? '#999' : '#4CAF50', 
+              color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' 
+            }}
           >
             {isSubmitting ? 'Сохранение...' : 'Сохранить оплату'}
           </button>
