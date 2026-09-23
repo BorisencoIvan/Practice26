@@ -570,9 +570,6 @@ export default function SupplierDashboard() {
             ))}
           </nav>
         </div>
-        <div style={{ fontSize: "12px", color: "#5C6473", paddingLeft: "8px" }}>
-          Арпенти Алексей
-        </div>
       </aside>
 
       {/* Главный контент */}
