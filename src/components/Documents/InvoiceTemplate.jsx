@@ -1,5 +1,4 @@
 // src/components/Documents/InvoiceTemplate.jsx
-import React from 'react';
 import { format } from 'date-fns';
 import { amountToWordsMDL } from '../../utils/numberToWords';
 import './InvoiceTemplate.css';

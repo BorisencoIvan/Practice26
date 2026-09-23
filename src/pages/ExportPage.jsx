@@ -1,37 +1,49 @@
 import { useState } from 'react';
+import { downloadCsv, downloadXlsx } from '../api/api';
 
 export default function ExportPage() {
   const [type, setType] = useState('csv');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const availableColumns = [
-    'client',
-    'date',
-    'total',
-    'status'
-  ];
+  async function handleExport() {
+    try {
+      setLoading(true);
+      setError('');
 
-  const [columns, setColumns] = useState([
-    'client',
-    'date'
-  ]);
+      const blob =
+        type === 'csv'
+          ? await downloadCsv()
+          : await downloadXlsx();
 
-  const handleExport = () => {
-    alert(`
-Формат: ${type}
-Период: ${fromDate} - ${toDate}
-Колонки: ${columns.join(', ')}
-    `);
-  };
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+
+      link.download =
+        type === 'csv'
+          ? 'report.csv'
+          : 'report.xlsx';
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div>
       <h2>Экспорт данных</h2>
 
-      <div style={{ marginBottom: '15px' }}>
-        <label>Формат файла: </label>
-
+      <label>
+        Формат файла:
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
@@ -39,68 +51,19 @@ export default function ExportPage() {
           <option value="csv">CSV</option>
           <option value="xlsx">XLSX</option>
         </select>
-      </div>
+      </label>
 
-      <div style={{ marginBottom: '15px' }}>
-        <label>Дата от: </label>
-
-        <input
-          type="date"
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-        />
-      </div>
-
-      <div style={{ marginBottom: '15px' }}>
-        <label>Дата до: </label>
-
-        <input
-          type="date"
-          value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-        />
-      </div>
-
-      <h3>Выберите колонки:</h3>
-
-      {availableColumns.map((col) => (
-        <label
-          key={col}
-          style={{
-            display: 'block',
-            marginBottom: '5px'
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={columns.includes(col)}
-            onChange={() => {
-              if (columns.includes(col)) {
-                setColumns(
-                  columns.filter(c => c !== col)
-                );
-              } else {
-                setColumns([
-                  ...columns,
-                  col
-                ]);
-              }
-            }}
-          />
-
-          {' '}{col}
-        </label>
-      ))}
+      {error && (
+        <p style={{ color: 'red' }}>
+          Ошибка: {error}
+        </p>
+      )}
 
       <button
         onClick={handleExport}
-        style={{
-          marginTop: '20px',
-          padding: '10px 20px',
-          cursor: 'pointer'
-        }}
+        disabled={loading}
       >
-        Скачать экспорт
+        {loading ? 'Загрузка...' : 'Скачать экспорт'}
       </button>
     </div>
   );
