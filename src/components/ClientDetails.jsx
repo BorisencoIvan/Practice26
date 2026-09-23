@@ -17,9 +17,10 @@ export default function ClientDetails({ client, onBack }) {
         if (!response.ok) throw new Error('Ошибка загрузки данных клиента');
         const data = await response.json();
         
+        console.log("Данные клиента от сервера:", data);
         // Предполагаем, что сервер Максима возвращает { invoices: [], history: [] }
         setInvoices(data.invoices || []);
-        setHistory(data.history || []);
+        setHistory(data.paymentHistory || []);
         setLoading(false);
       } catch (err) {
         setError(err.message);
@@ -36,8 +37,9 @@ export default function ClientDetails({ client, onBack }) {
     try {
         const response = await fetch(`/api/v1/clients/${client.id}`);
         const data = await response.json();
+        console.log("Данные клиента от сервера:", data);
         setInvoices(data.invoices || []);
-        setHistory(data.history || []);
+        setHistory(data.paymentHistory || []);
         setLoading(false);
     } catch(err) {
         console.error("Ошибка обновления после оплаты");
