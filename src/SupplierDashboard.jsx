@@ -101,7 +101,7 @@ export default function SupplierDashboard() {
 
         <ErrorBanner message={apiError} onRetry={loadData} loading={loading} />
 
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "16px", marginBottom: "32px" }}>
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", marginBottom: "32px" }}>
           <KpiCard accent={T.amber} icon={<TrendingUp size={16} />} title="ПРОДАЖИ" primary={fmtMDL(summaryData.todaySales)} secondary={{ label: "за месяц", value: fmtMDL(summaryData.monthSales) }} delta={summaryData.salesDelta} deltaLabel="к прошлому месяцу" />
           <KpiCard accent={T.inkSoft} icon={<Clock size={16} />} title="ЗАКАЗЫ В ОЖИДАНИИ" primary={summaryData.pendingOrders} secondary={{ label: "среднее / день", value: "—" }} onClick={() => toggleKpi("orders")} active={selectedKpi === "orders"} />
           <KpiCard accent={T.teal} icon={<RouteIcon size={16} />} title="АКТИВНЫЕ МАРШРУТЫ" primary={summaryData.activeRoutes} secondary={{ label: "Маршруты на линии", value: routesData.length }} onClick={() => toggleKpi("routes")} active={selectedKpi === "routes"} />
