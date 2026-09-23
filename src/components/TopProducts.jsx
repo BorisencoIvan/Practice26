@@ -1,10 +1,13 @@
-const topProducts = Array.from({ length: 10 }, (_, i) => ({
-  id: i + 1,
-  name: `Товар ${i + 1}`,
-  qty: Math.floor(Math.random() * 500) + 50,
-}));
+export default function TopProducts({ products = [] }) {
+  const topProducts = [...products]
+    .map((product) => ({
+      id: product.id,
+      name: product.name || product.productName || "Без названия",
+      qty: Number(product.qty ?? product.quantity ?? product.stock ?? product.value ?? 0),
+    }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 10);
 
-export default function TopProducts() {
   return (
     <div className="top-list">
       <h3>Топ-10 Товаров</h3>
@@ -17,6 +20,11 @@ export default function TopProducts() {
           </tr>
         </thead>
         <tbody>
+          {topProducts.length === 0 && (
+            <tr>
+              <td colSpan="3">Нет данных в базе</td>
+            </tr>
+          )}
           {topProducts.map((p, i) => (
             <tr key={p.id}>
               <td>{i + 1}</td>

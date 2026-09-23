@@ -1,4 +1,3 @@
-import React from 'react';
 import SupplierDashboard from './SupplierDashboard';
 
 export default function App() {
