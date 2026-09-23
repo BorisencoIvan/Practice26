@@ -6,16 +6,16 @@ import './InvoiceTemplate.css';
 export const InvoiceTemplate = ({ invoiceData, supplierInfo }) => {
   if (!invoiceData) return <div>Загрузка данных счёта...</div>;
 
-  const {
-    serie,
-    number,
-    order_id,
-    client,
-    issued_at,
-    due_at,
-    items = [],
-    total
-  } = invoiceData;
+ const {
+serie,
+number,
+order_id,
+client,
+issued_at,
+due_at,
+items = [],
+} = invoiceData;
+
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -41,7 +41,7 @@ export const InvoiceTemplate = ({ invoiceData, supplierInfo }) => {
 
   const subtotalWithoutVat = calculatedItems.reduce((acc, i) => acc + i.sumWithoutVat, 0);
   const totalVat = calculatedItems.reduce((acc, i) => acc + i.vatAmount, 0);
-  const grandTotal = Number(total) || (subtotalWithoutVat + totalVat);
+  const grandTotal = subtotalWithoutVat + totalVat;
 
   return (
     <div className="invoice-container">
@@ -70,13 +70,32 @@ export const InvoiceTemplate = ({ invoiceData, supplierInfo }) => {
 
         <section className="invoice-parties">
           <div className="party supplier">
-            <h3>Продавец (Поставщик):</h3>
-            <p><strong>{supplierInfo?.name}</strong></p>
-            <p>Фискальный код/ИНН: {supplierInfo?.fiscalCode}</p>
-            <p>Адрес: {supplierInfo?.address}</p>
-            <p>Банк: {supplierInfo?.bankName}</p>
-            <p>p/с: {supplierInfo?.bankAccount}</p>
-          </div>
+  <h3>Продавец (Поставщик):</h3>
+
+  <p>
+    <strong>{supplierInfo?.name}</strong>
+  </p>
+
+  <p>
+    Контактное лицо: {supplierInfo?.contactPerson}
+  </p>
+
+  <p>
+    Фискальный код/ИНН: {supplierInfo?.fiscalCode}
+  </p>
+
+  <p>
+    Адрес: {supplierInfo?.address}
+  </p>
+
+  <p>
+    Банк: {supplierInfo?.bankName}
+  </p>
+
+  <p>
+    р/с: {supplierInfo?.bankAccount}
+  </p>
+</div>ы
 
           <div className="party client">
             <h3>Покупатель (Клиент):</h3>

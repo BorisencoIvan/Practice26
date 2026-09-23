@@ -1,18 +1,21 @@
 // src/utils/numberToWords.js
 
 export function amountToWordsMDL(amount) {
-  const num = parseFloat(amount);
+  const num = Number(amount);
+
   if (isNaN(num)) return '';
 
-  const lei = Math.floor(num);
-  const bani = Math.round((num - lei) * 100);
+  let lei = Math.floor(num);
+  let bani = Math.round((num - lei) * 100);
 
-  // Для учебного/курсового проекта можно использовать локализованную конвертацию 
-  // или библиотеку n2words / number-to-words.
-  // Ниже пример вывода красивой строки:
+  if (bani === 100) {
+    lei += 1;
+    bani = 0;
+  }
+
   const leiText = convertNumberToWordsRu(lei);
-  
-  return `${leiText} леев ${bani.toString().padStart(2, '0')} банов`;
+
+  return `${leiText} леев ${String(bani).padStart(2, '0')} банов`;
 }
 
 // Упрощённый конвертер целых чисел до 999 999 в пропись
