@@ -16,10 +16,30 @@ function buildPdfBufferFromInvoice(invoice) {
     doc.fontSize(12).text(`Serie: ${invoice.serie || 'INV'}`);
     doc.text(`Number: ${invoice.number || ''}`);
     doc.text(`Order ID: ${invoice.order_id || ''}`);
+    doc.text(`Order number: ${invoice.orderNumber || ''}`);
     doc.text(`Client ID: ${invoice.client_id || ''}`);
     doc.text(`Issued at: ${invoice.issued_at || ''}`);
     doc.text(`Due at: ${invoice.due_at || ''}`);
     doc.moveDown();
+
+    if (invoice.supplier && Object.keys(invoice.supplier).length > 0) {
+      doc.text(`Supplier: ${invoice.supplier.legalName || ''}`);
+      doc.text(`Supplier tax ID: ${invoice.supplier.taxId || ''}`);
+      doc.text(`Supplier address: ${invoice.supplier.address || ''}`);
+      doc.text(`Bank: ${invoice.supplier.bankName || ''}`);
+      doc.text(`IBAN: ${invoice.supplier.iban || ''}`);
+      doc.moveDown();
+    }
+
+    if (invoice.client) {
+      doc.text(`Buyer: ${invoice.client.companyName || invoice.client.name || ''}`);
+      doc.text(`Buyer tax ID: ${invoice.client.fiscalCode || ''}`);
+      doc.text(`Buyer address: ${invoice.client.address || ''}`);
+      doc.moveDown();
+    }
+
+    doc.text(`Subtotal without VAT: ${invoice.subtotal || '0.00'}`);
+    doc.text(`VAT total: ${invoice.vatTotal || '0.00'}`);
     doc.text(`Total: ${invoice.total || '0.00'}`);
     doc.text(`Paid: ${invoice.paid || '0.00'}`);
     doc.text(`Status: ${invoice.status || 'issued'}`);
@@ -28,7 +48,12 @@ function buildPdfBufferFromInvoice(invoice) {
       doc.moveDown();
       doc.text('Items', { underline: true });
       invoice.items.forEach((item, index) => {
-        doc.text(`${index + 1}. ${item.name || 'Item'} - ${item.qty || 0} x ${item.priceWithoutVat || 0}`);
+        doc.text(`${item.lineNumber || index + 1}. ${item.name || 'Item'}`);
+        doc.text(`   Specification: ${item.variant || ''}`);
+        doc.text(`   Quantity: ${item.quantity || 0} ${item.unit || ''}`);
+        doc.text(`   Unit price without VAT: ${item.unitPrice || 0}`);
+        doc.text(`   VAT ${item.vatRate || 0}%: ${item.vatAmount || '0.00'}`);
+        doc.text(`   Line total: ${item.totalAmount || '0.00'}`);
       });
     }
 

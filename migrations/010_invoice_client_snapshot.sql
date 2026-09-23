@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS client_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+COMMIT;

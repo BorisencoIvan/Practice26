@@ -6,10 +6,10 @@
     "main": "src/app.js",
     "scripts": {
         "test": "node --test",
-        "dev": "node src/app.js",
-        "migrate": "node migrations/run.js",
-        "seed": "node migrations/run.js && node -e \"console.log('Seed data is applied via migrations/002_seed_demo.sql')\"",
-        "start": "node src/app.js"
+        "dev": "node --env-file=.env src/server.js",
+        "migrate": "node --env-file=.env migrations/run.js",
+        "seed": "node --env-file=.env migrations/run.js && node -e \"console.log('Seed data is applied via migrations/002_seed_demo.sql')\"",
+        "start": "node --env-file=.env src/server.js"
     },
     "keywords": [
         "backend",

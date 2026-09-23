@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE clients
+  ADD COLUMN IF NOT EXISTS address TEXT;
+
+COMMIT;

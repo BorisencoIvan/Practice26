@@ -18,7 +18,7 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
     throw new Error('PAYMENT_INVALID_INVOICE');
   }
 
-  if (!Number.isInteger(normalizedClientId) || normalizedClientId <= 0) {
+  if (clientId !== undefined && (!Number.isInteger(normalizedClientId) || normalizedClientId <= 0)) {
     throw new Error('PAYMENT_INVALID_CLIENT');
   }
 
@@ -28,7 +28,7 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
     await client.query('BEGIN');
 
     const invoiceResult = await client.query(
-      'SELECT id, total, paid, status FROM invoices WHERE id = $1 FOR UPDATE',
+      'SELECT id, client_id, total, paid, status FROM invoices WHERE id = $1 FOR UPDATE',
       [normalizedInvoiceId]
     );
 
@@ -37,6 +37,10 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
     }
 
     const invoice = invoiceResult.rows[0];
+    if (clientId !== undefined && normalizedClientId !== Number(invoice.client_id)) {
+      throw new Error('PAYMENT_CLIENT_MISMATCH');
+    }
+
     const currentPaid = Number(invoice.paid || 0);
     const total = Number(invoice.total || 0);
     const remaining = total - currentPaid;
@@ -52,7 +56,7 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
       `INSERT INTO payments (invoice_id, client_id, amount, payment_method, reference, paid_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING id, invoice_id, client_id, amount, payment_method, reference, paid_at`,
-      [normalizedInvoiceId, normalizedClientId, normalizedAmount, paymentMethod, reference]
+      [normalizedInvoiceId, Number(invoice.client_id), normalizedAmount, paymentMethod, reference]
     );
 
     await client.query(
