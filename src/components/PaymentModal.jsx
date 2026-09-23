@@ -74,10 +74,7 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
     };
 
     try {
-      // ВРЕМЕННАЯ ЗАГЛУШКА: Имитируем запрос к серверу (удали setTimeout потом)
-      // Когда Максим даст URL, раскомментируй код ниже (fetch...)
-      
-      /*
+      // Реальный запрос к серверу Максима
       const response = await fetch('/api/v1/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,20 +83,16 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        // Перехватываем ошибку 409 или любую другую, как просил Максим в файле handoff
+        // Перехватываем ошибку 409 или любую другую
         throw new Error(errorData.error || 'Произошла неизвестная ошибка сервера');
       }
-      */
 
-      // Имитация успешного ответа
-      setTimeout(() => {
-        setIsSubmitting(false);
-        onSubmit(paymentData); 
-      }, 1000);
-
+      setIsSubmitting(false);
+      onSubmit(); // Сообщаем ClientDetails, что нужно обновить данные
+      
     } catch (err) {
       setIsSubmitting(false);
-      setApiError(err.message); // Выведет текст ошибки на экран
+      setApiError(err.message);
     }
   };
 

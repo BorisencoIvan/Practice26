@@ -1,21 +1,51 @@
 // src/components/ClientDetails.jsx
-import { useState } from 'react';
-import { clientInvoices, paymentHistoryData } from '../mockData';
+import { useState, useEffect } from 'react';
 import PaymentModal from './PaymentModal';
 
 export default function ClientDetails({ client, onBack }) {
-  const invoices = clientInvoices.filter(inv => inv.clientId === client.id);
-  // Фильтруем историю платежей для конкретного клиента
-  const history = paymentHistoryData.filter(pay => pay.clientId === client.id);
+  const [invoices, setInvoices] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  const handlePaymentSubmit = async (paymentData) => {
-    // Пока сервер не готов, просто выводим в консоль и закрываем
-    console.log("Отправляем на сервер:", paymentData);
-    alert("Оплата успешно сохранена (имитация)!");
+  useEffect(() => {
+    const fetchClientDetails = async () => {
+      try {
+        const response = await fetch(`/api/v1/clients/${client.id}`);
+        if (!response.ok) throw new Error('Ошибка загрузки данных клиента');
+        const data = await response.json();
+        
+        // Предполагаем, что сервер Максима возвращает { invoices: [], history: [] }
+        setInvoices(data.invoices || []);
+        setHistory(data.history || []);
+        setLoading(false);
+      } catch (err) {
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+    fetchClientDetails();
+  }, [client.id]);
+
+  const handlePaymentSubmit = async () => {
     setIsPaymentModalOpen(false);
+    // При успехе перезагружаем данные, чтобы обновить балансы на экране
+    setLoading(true);
+    try {
+        const response = await fetch(`/api/v1/clients/${client.id}`);
+        const data = await response.json();
+        setInvoices(data.invoices || []);
+        setHistory(data.history || []);
+        setLoading(false);
+    } catch(err) {
+        console.error("Ошибка обновления после оплаты");
+    }
   };
+
+  if (loading) return <div style={{ padding: '20px' }}>Загрузка профиля...</div>;
+  if (error) return <div style={{ padding: '20px', color: 'red' }}>Ошибка: {error}</div>;
 
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
@@ -40,7 +70,6 @@ export default function ClientDetails({ client, onBack }) {
         </div>
       </div>
 
-      {/* Блок 1: Неоплаченные счета */}
       <h3>Неоплаченные счета (Facturi neachitate)</h3>
       {invoices.length > 0 ? (
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '40px' }}>
@@ -69,7 +98,6 @@ export default function ClientDetails({ client, onBack }) {
         <p style={{ color: '#666', marginBottom: '40px' }}>У этого клиента нет неоплаченных счетов.</p>
       )}
 
-      {/* Блок 2: История платежей (НОВОЕ) */}
       <h3>История платежей (Istoric de plăți)</h3>
       {history.length > 0 ? (
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
