@@ -19,9 +19,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   X,
+  RefreshCw,
 } from "lucide-react";
 
-// Цветовые токены
 const T = {
   ink: "#12161F",
   inkSoft: "#2A303C",
@@ -34,7 +34,10 @@ const T = {
   textMuted: "#6B7178",
 };
 
-const API_BASE = "/api/v1";
+const API_BASE = (
+  import.meta.env.VITE_API_BASE ||
+  "https://speakers-leon-solar-lucas.trycloudflare.com/api/v1"
+).replace(/\/$/, "");
 
 class ApiError extends Error {
   constructor(status, message) {
@@ -43,12 +46,13 @@ class ApiError extends Error {
   }
 }
 
-// Защищенный забор данных: перехватывает HTML вместо JSON до ошибки парсинга
+// Запрос согласно правилам контракта
 async function apiFetch(path, options = {}) {
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       headers: { "Content-Type": "application/json" },
+      method: "GET",
       ...options,
     });
   } catch (_err) {
@@ -57,33 +61,91 @@ async function apiFetch(path, options = {}) {
 
   const contentType = res.headers.get("content-type") || "";
 
+  // Проверка формата JSON (предотвращает Unexpected token '<')
   if (!contentType.includes("application/json")) {
     throw new ApiError(
       res.status || 404,
-      `API роут ${path} вернул HTML/текст вместо JSON.`
+      `Эндпоинт ${path} вернул non-JSON ответ`
     );
   }
 
+  const data = await res.json();
+
   if (!res.ok) {
-    let msg = `Ошибка ${res.status}`;
-    try {
-      const data = await res.json();
-      msg = data.error || msg;
-    } catch (_e) {}
-    throw new ApiError(res.status, msg);
+    // В ответах строго одно поле `error` для ошибок
+    const errorMessage = data && typeof data.error === "string" ? data.error : null;
+
+    // Стандартные расшифровки кодов из правил контракта
+    if (!errorMessage) {
+      if (res.status === 422) throw new ApiError(422, "Некорректные входные данные (422)");
+      if (res.status === 404) throw new ApiError(404, "Ресурс не найден (404)");
+      if (res.status === 409) throw new ApiError(409, "Конфликт бизнес-логики (409)");
+      if (res.status === 500) throw new ApiError(500, "Внутренняя ошибка сервера (500)");
+      throw new ApiError(res.status, `Ошибка сервера (${res.status})`);
+    }
+
+    throw new ApiError(res.status, errorMessage);
   }
 
-  return res.json();
+  return data;
 }
 
-function friendlyErrorMessage(err) {
-  if (err.status === 0) return err.message;
-  if (err.status === 404) return "Эндпоинт API не найден (404).";
-  if (err.status === 500) return "Внутренняя ошибка сервера (500).";
-  return err.message || "Ошибка загрузки данных.";
+function friendlyErrorMessage(errs) {
+  const messages = Array.isArray(errs) ? errs : [errs];
+  const unique = [...new Set(messages.map((e) => e?.message || String(e)))];
+  return unique.join(" | ");
 }
 
-function ErrorBanner({ message, onRetry }) {
+// Форматирование денежных значений (поддержка чисел и числовых строк)
+function fmtMDL(value) {
+  if (value === null || value === undefined) return "0 MDL";
+  const num = typeof value === "number" ? value : parseFloat(value);
+  return new Intl.NumberFormat("ru-RU").format(Math.round(isNaN(num) ? 0 : num)) + " MDL";
+}
+
+// Парсинг дат стандарта ISO 8601
+function fmtDate(isoString) {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function agingBucket(days) {
+  if (days <= 30) return "0–30 дней";
+  if (days <= 60) return "31–60 дней";
+  return "более 60 дней";
+}
+
+const EMPTY_SUMMARY = {
+  todaySales: 0,
+  monthSales: 0,
+  pendingOrders: 0,
+  activeRoutes: 0,
+  totalReceivable: 0,
+  overdueInvoicesCount: 0,
+  salesDelta: undefined,
+  pendingOrdersList: [],
+  activeRoutesList: [],
+  salesSeries: [],
+  topClients: [],
+  topProducts: [],
+};
+
+function normalizeSalesSeries(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((row) => ({
+    label: row.label || fmtDate(row.date || row.day || row.period),
+    vanzari: Number(row.vanzari ?? row.sales ?? row.value ?? row.amount ?? 0),
+  }));
+}
+
+function ErrorBanner({ message, onRetry, loading }) {
   if (!message) return null;
   return (
     <div
@@ -101,11 +163,12 @@ function ErrorBanner({ message, onRetry }) {
       }}
     >
       <span>
-        <strong>Внимание:</strong> {message} Отображаются демонстрационные данные.
+        <strong>Внимание:</strong> {message}. Данные из сервера не загружены.
       </span>
       {onRetry && (
         <button
           onClick={onRetry}
+          disabled={loading}
           style={{
             fontSize: "12px",
             padding: "4px 10px",
@@ -114,99 +177,18 @@ function ErrorBanner({ message, onRetry }) {
             background: "transparent",
             cursor: "pointer",
             whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
           }}
         >
-          Повторить
+          <RefreshCw size={12} className={loading ? "spin" : ""} />
+          {loading ? "Загрузка..." : "Повторить"}
         </button>
       )}
     </div>
   );
 }
-
-function buildSeries(days = 90) {
-  const out = [];
-  let base = 42000;
-  const today = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    base += Math.round((Math.random() - 0.42) * 4000);
-    base = Math.max(base, 18000);
-    out.push({
-      label: d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }),
-      vanzari: base,
-    });
-  }
-  return out;
-}
-
-const TOP_CLIENTS = [
-  { name: "Fabrica Sud SRL", value: 184200 },
-  { name: "Nord Distribuție", value: 162900 },
-  { name: "AgroPlus Chișinău", value: 149500 },
-  { name: "Metalcom Bălți", value: 133700 },
-  { name: "Vector Trading", value: 121300 },
-  { name: "Prim Construct", value: 108600 },
-  { name: "EuroLogistic", value: 97400 },
-  { name: "Bunătăți Casei", value: 88100 },
-  { name: "Terra Import", value: 76300 },
-  { name: "OptimStar", value: 64900 },
-];
-
-const TOP_PRODUCTS = [
-  { name: "Цемент Портланд 42.5", value: 96 },
-  { name: "Профиль металлический 40x40", value: 88 },
-  { name: "Краска фасадная 15л", value: 81 },
-  { name: "Плита OSB 18мм", value: 74 },
-  { name: "Кабель электрический 2x1.5", value: 69 },
-  { name: "Труба ПВХ 110мм", value: 63 },
-  { name: "Масло гидравлическое 20л", value: 57 },
-  { name: "Блок газобетонный 60x30", value: 51 },
-  { name: "Фитинги (комплект)", value: 44 },
-  { name: "Клей для плитки 25кг", value: 38 },
-];
-
-function fmtMDL(value) {
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return new Intl.NumberFormat("ru-RU").format(Math.round(num)) + " MDL";
-}
-
-function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function agingBucket(days) {
-  if (days <= 30) return "0–30 дней";
-  if (days <= 60) return "31–60 дней";
-  return "более 60 дней";
-}
-
-const PENDING_ORDERS = [
-  { id: "CMD-1042", client: "Fabrica Sud SRL", value: 18400, days: 1 },
-  { id: "CMD-1041", client: "Vector Trading", value: 9200, days: 1 },
-  { id: "CMD-1039", client: "AgroPlus Chișinău", value: 27600, days: 2 },
-  { id: "CMD-1035", client: "Terra Import", value: 5400, days: 3 },
-  { id: "CMD-1030", client: "Metalcom Bălți", value: 14100, days: 4 },
-];
-
-const ACTIVE_ROUTES = [
-  { id: "R-08", driver: "В. Чеботарь", stops: 6, status: "в пути" },
-  { id: "R-05", driver: "И. Постолаки", stops: 4, status: "в пути" },
-  { id: "R-11", driver: "Н. Гуцу", stops: 8, status: "погрузка" },
-  { id: "R-03", driver: "С. Руссу", stops: 3, status: "в пути" },
-];
-
-const OVERDUE_INVOICES = [
-  { no: "FCT-2231", client: "Nord Distribuție", value: "22100.00", issuedAt: "2026-07-10T09:00:00.000Z", agingDays: 74 },
-  { no: "FCT-2214", client: "Prim Construct", value: "15600.00", issuedAt: "2026-08-02T09:00:00.000Z", agingDays: 51 },
-  { no: "FCT-2198", client: "EuroLogistic", value: "9800.00", issuedAt: "2026-08-15T09:00:00.000Z", agingDays: 38 },
-  { no: "FCT-2180", client: "OptimStar", value: "12300.00", issuedAt: "2026-08-31T09:00:00.000Z", agingDays: 22 },
-  { no: "FCT-2177", client: "Bunătăți Casei", value: "6700.00", issuedAt: "2026-09-10T09:00:00.000Z", agingDays: 12 },
-];
 
 function KpiCard({ accent, icon, title, primary, secondary, delta, deltaLabel, onClick, active }) {
   return (
@@ -235,7 +217,7 @@ function KpiCard({ accent, icon, title, primary, secondary, delta, deltaLabel, o
         <div style={{ color: accent, flexShrink: 0 }}>{icon}</div>
       </div>
 
-      <div style={{ fontSize: "20px", fontWeight: 600, color: T.ink, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+      <div style={{ fontSize: "18px", fontWeight: 600, color: T.ink, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {primary}
       </div>
 
@@ -276,16 +258,21 @@ function KpiCard({ accent, icon, title, primary, secondary, delta, deltaLabel, o
 }
 
 function RankTable({ title, rows, valueFmt }) {
-  const max = Math.max(...rows.map((r) => r.value));
+  const max = Math.max(...rows.map((r) => Number(r.value) || 1), 1);
   return (
     <div style={{ flex: "1 1 320px", background: T.card, border: `1px solid ${T.line}` }}>
       <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.line}` }}>
         <h3 style={{ fontSize: "14px", fontWeight: 600, color: T.ink, margin: 0 }}>{title}</h3>
       </div>
       <div style={{ padding: "8px 20px" }}>
+        {rows.length === 0 && (
+          <div style={{ padding: "16px 0", fontSize: "13px", color: T.textMuted }}>
+            Нет данных в базе
+          </div>
+        )}
         {rows.map((r, i) => (
           <div
-            key={r.name}
+            key={r.name || i}
             style={{
               display: "flex",
               alignItems: "center",
@@ -325,32 +312,47 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-function DrillPanel({ kpi, onClose }) {
+function DrillPanel({ kpi, summary, ordersData, routesData, agingData, onClose }) {
   if (!kpi) return null;
 
-  const content = {
-    orders: {
+  let content = null;
+
+  if (kpi === "orders") {
+    content = {
       title: "Заказы в ожидании",
-      rows: PENDING_ORDERS.map((o) => [o.id, o.client, fmtMDL(o.value), `${o.days} дн.`]),
       cols: ["Заказ", "Клиент", "Сумма", "В ожидании"],
-    },
-    routes: {
-      title: "Активные маршруты",
-      rows: ACTIVE_ROUTES.map((r) => [r.id, r.driver, `${r.stops} точек`, r.status]),
-      cols: ["Маршрут", "Водитель", "Остановки", "Статус"],
-    },
-    receivable: {
-      title: "Детализация задолженностей",
-      rows: OVERDUE_INVOICES.map((f) => [
-        f.no,
-        f.client,
-        fmtDate(f.issuedAt),
-        fmtMDL(f.value),
-        agingBucket(f.agingDays),
+      rows: ordersData.map((o) => [
+        o.id,
+        o.client,
+        fmtMDL(o.value),
+        `${o.days} дн.`,
       ]),
-      cols: ["Счет-фактура", "Клиент", "Дата выписки", "Сумма", "Просрочка"],
-    },
-  }[kpi];
+    };
+  } else if (kpi === "routes") {
+    content = {
+      title: "Активные маршруты",
+      cols: ["Маршрут", "Водитель", "Остановки", "Статус"],
+      rows: routesData.map((r) => [
+        r.id,
+        r.driver,
+        `${r.stops} точек`,
+        r.status,
+      ]),
+    };
+  } else if (kpi === "receivable") {
+    const list = agingData || [];
+    content = {
+      title: "Отчет по дебиторской задолженности",
+      cols: ["Счет-фактура", "Клиент", "Дата выписки (ISO 8601)", "Сумма", "Просрочка"],
+      rows: list.map((f) => [
+        f.no || f.invoiceNo || f.id,
+        f.client || f.clientName,
+        fmtDate(f.issuedAt || f.date),
+        fmtMDL(f.value || f.amount),
+        agingBucket(f.agingDays || f.daysOverdue || 0),
+      ]),
+    };
+  }
 
   if (!content) return null;
 
@@ -429,32 +431,87 @@ function DrillPanel({ kpi, onClose }) {
 }
 
 export default function SupplierDashboard() {
-  const fullSeries = useMemo(() => buildSeries(90), []);
   const [rangeDays, setRangeDays] = useState(30);
   const [selectedKpi, setSelectedKpi] = useState(null);
+
+  const [summaryData, setSummaryData] = useState(EMPTY_SUMMARY);
+  const [ordersData, setOrdersData] = useState([]);
+  const [routesData, setRoutesData] = useState([]);
+  const [productsData, setProductsData] = useState([]);
+  const [agingData, setAgingData] = useState([]);
+
+  const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
 
-  const loadDashboard = () => {
+  const loadData = async () => {
+    setLoading(true);
     setApiError(null);
-    apiFetch("/dashboard/summary").catch((err) => {
-      setApiError(friendlyErrorMessage(err));
-    });
+
+    const errors = [];
+
+    // GET /api/v1/dashboard/summary
+    try {
+      const summary = await apiFetch("/dashboard/summary");
+      if (summary) {
+        setSummaryData({
+          ...EMPTY_SUMMARY,
+          ...(summary.summary || {}),
+          salesSeries: summary.salesSeries || [],
+          topClients: summary.topClients || [],
+          topProducts: summary.topProducts || [],
+        });
+      }
+    } catch (err) {
+      errors.push(err);
+    }
+
+    // GET /api/v1/reports/aging
+    try {
+      const aging = await apiFetch("/reports/aging");
+      if (aging) setAgingData(aging.overdueInvoices || aging);
+    } catch (err) {
+      errors.push(err);
+    }
+
+    // GET /api/v1/orders?status=pending
+    try {
+      const orders = await apiFetch("/orders?status=pending");
+      setOrdersData(Array.isArray(orders) ? orders : orders.orders || []);
+    } catch (err) {
+      errors.push(err);
+    }
+
+    // GET /api/v1/routes?status=active
+    try {
+      const routes = await apiFetch("/routes?status=active");
+      setRoutesData(Array.isArray(routes) ? routes : routes.routes || []);
+    } catch (err) {
+      errors.push(err);
+    }
+
+    // GET /api/v1/products?limit=10
+    try {
+      const products = await apiFetch("/products?limit=10");
+      setProductsData(Array.isArray(products) ? products : products.products || []);
+    } catch (err) {
+      errors.push(err);
+    }
+
+    if (errors.length > 0) {
+      setApiError(friendlyErrorMessage(errors));
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadDashboard();
+    loadData();
   }, []);
 
   const series = useMemo(
-    () => fullSeries.slice(fullSeries.length - rangeDays),
-    [fullSeries, rangeDays]
+    () => normalizeSalesSeries(summaryData.salesSeries).slice(-rangeDays),
+    [summaryData.salesSeries, rangeDays]
   );
-
-  const todaySales = fullSeries[fullSeries.length - 1].vanzari;
-  const monthSales = 450000;
-  const pendingOrders = 34;
-  const activeRoutes = 12;
-  const totalReceivable = "120500.00";
 
   const toggleKpi = (key) => setSelectedKpi((cur) => (cur === key ? null : key));
 
@@ -513,6 +570,9 @@ export default function SupplierDashboard() {
             ))}
           </nav>
         </div>
+        <div style={{ fontSize: "12px", color: "#5C6473", paddingLeft: "8px" }}>
+          Арпенти Алексей
+        </div>
       </aside>
 
       {/* Главный контент */}
@@ -532,13 +592,13 @@ export default function SupplierDashboard() {
           </div>
         </header>
 
-        <ErrorBanner message={apiError} onRetry={loadDashboard} />
+        <ErrorBanner message={apiError} onRetry={loadData} loading={loading} />
 
-        {/* Ровная сетка 4 в ряд */}
+        {/* Сетка 4 карточки в ряд */}
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
             gap: "16px",
             marginBottom: "32px",
           }}
@@ -547,17 +607,17 @@ export default function SupplierDashboard() {
             accent={T.amber}
             icon={<TrendingUp size={16} />}
             title="ПРОДАЖИ"
-            primary={fmtMDL(todaySales)}
-            secondary={{ label: "за месяц", value: fmtMDL(monthSales) }}
-            delta={12}
+            primary={fmtMDL(summaryData.todaySales)}
+            secondary={{ label: "за месяц", value: fmtMDL(summaryData.monthSales) }}
+            delta={summaryData.salesDelta}
             deltaLabel="к прошлому месяцу"
           />
           <KpiCard
             accent={T.inkSoft}
             icon={<Clock size={16} />}
             title="ЗАКАЗЫ В ОЖИДАНИИ"
-            primary={pendingOrders}
-            secondary={{ label: "среднее / день", value: "4" }}
+            primary={summaryData.pendingOrders}
+            secondary={{ label: "среднее / день", value: "—" }}
             onClick={() => toggleKpi("orders")}
             active={selectedKpi === "orders"}
           />
@@ -565,8 +625,8 @@ export default function SupplierDashboard() {
             accent={T.teal}
             icon={<RouteIcon size={16} />}
             title="АКТИВНЫЕ МАРШРУТЫ"
-            primary={activeRoutes}
-            secondary={{ label: "водители на линии", value: "9" }}
+            primary={summaryData.activeRoutes}
+            secondary={{ label: "водители на линии", value: "—" }}
             onClick={() => toggleKpi("routes")}
             active={selectedKpi === "routes"}
           />
@@ -574,16 +634,23 @@ export default function SupplierDashboard() {
             accent={T.rust}
             icon={<Wallet size={16} />}
             title="ОБЩАЯ СУММА К ПОЛУЧЕНИЮ"
-            primary={fmtMDL(totalReceivable)}
-            secondary={{ label: "просроченные счета", value: "18" }}
+            primary={fmtMDL(summaryData.totalReceivable)}
+            secondary={{ label: "просроченные счета", value: summaryData.overdueInvoicesCount }}
             onClick={() => toggleKpi("receivable")}
             active={selectedKpi === "receivable"}
           />
         </section>
 
-        <DrillPanel kpi={selectedKpi} onClose={() => setSelectedKpi(null)} />
+        <DrillPanel
+          kpi={selectedKpi}
+          summary={summaryData}
+          ordersData={ordersData}
+          routesData={routesData}
+          agingData={agingData}
+          onClose={() => setSelectedKpi(null)}
+        />
 
-        {/* График продаж */}
+        {/* График динамики продаж */}
         <section style={{ marginBottom: "32px", padding: "20px", background: T.card, border: `1px solid ${T.line}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: 600, color: T.ink, margin: 0 }}>
@@ -608,39 +675,45 @@ export default function SupplierDashboard() {
               ))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={series} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="fillVanzari" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={T.amber} stopOpacity={0.25} />
-                  <stop offset="100%" stopColor={T.amber} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke={T.line} vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: T.textMuted }}
-                axisLine={{ stroke: T.line }}
-                tickLine={false}
-                interval={rangeDays <= 7 ? 0 : rangeDays <= 30 ? 3 : 9}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: T.textMuted }}
-                axisLine={false}
-                tickLine={false}
-                width={45}
-                tickFormatter={(v) => `${Math.round(v / 1000)}k`}
-              />
-              <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="vanzari" stroke={T.amber} strokeWidth={2} fill="url(#fillVanzari)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {series.length === 0 ? (
+            <div style={{ height: "260px", display: "grid", placeItems: "center", color: T.textMuted, fontSize: "13px" }}>
+              Нет данных о продажах в базе
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={series} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="fillVanzari" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={T.amber} stopOpacity={0.25} />
+                    <stop offset="100%" stopColor={T.amber} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={T.line} vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: T.textMuted }}
+                  axisLine={{ stroke: T.line }}
+                  tickLine={false}
+                  interval={rangeDays <= 7 ? 0 : rangeDays <= 30 ? 3 : 9}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: T.textMuted }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={45}
+                  tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="vanzari" stroke={T.amber} strokeWidth={2} fill="url(#fillVanzari)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </section>
 
-        {/* Таблицы "Топ-10" */}
+        {/* Таблицы Топ-10 */}
         <section style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-          <RankTable title="Топ-10 клиентов" rows={TOP_CLIENTS} valueFmt={fmtMDL} />
-          <RankTable title="Топ-10 товаров" rows={TOP_PRODUCTS} valueFmt={(v) => `${v} шт.`} />
+          <RankTable title="Топ-10 клиентов" rows={summaryData.topClients} valueFmt={fmtMDL} />
+          <RankTable title="Топ-10 товаров" rows={productsData} valueFmt={(v) => `${v} шт.`} />
         </section>
       </main>
     </div>
