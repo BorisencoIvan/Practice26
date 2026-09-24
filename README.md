@@ -1,158 +1,66 @@
-# invoicing-backend
+# Invoicing Backend
 
-Backend for invoicing, delivery routes, and data export.
+Backend-приложение для управления заказами, счетами и доставками.
 
-## Project structure
+## Что это
 
-`
-src/
-  app.js           - API routes and handlers
-  server.js        - server startup (port 3000)
-  db/              - PostgreSQL connection
-  modules/
-    reports/       - queries: routes, reports, summaries
-    documents/     - invoice and delivery note lifecycle
-    payments/      - payment registration
-    exports/       - CSV/XLSX generation
-    pdf/           - PDF rendering
-migrations/        - SQL migrations (001-033)
-`
+Сервис предоставляет API для:
 
-## Main database tables
+- работы с заказами, клиентами и товарами;
+- создания и просмотра счетов;
+- планирования маршрутов доставки и их остановок;
+- формирования отчётов и экспорта данных в CSV/XLSX;
+- получения общей информации для приложения.
 
-- routes - route registry (code, name, driver, status, direction, dates, aggregates)
-- route_stops - route stops (order, recipient, supplier, goods, address, amount, status)
-- orders - orders
-- order_items - order line items
-- clients - clients
-- suppliers - suppliers
-- invoices - invoices
-- payments - payments
-- migrations - applied migration tracking
+Данные хранятся в PostgreSQL, а взаимодействие с системой выполняется через REST API.
 
-## Migrations (main)
+## Основные возможности
 
-- 001_init.sql - base schema
-- 021_order_delivery_address.sql - delivery address
-- 022_route_details.sql - driver, status, stop ordering
-- 023_route_report_view.sql - reporting view
-- 024_route_stops_on_routes.sql - route stops normalization
-- 025_normalize_route_stops.sql - routes.stops removed, route_stops table created
-- 026_route_summary_columns.sql - route aggregates
-- 027_route_lifecycle_fields.sql - lifecycle dates
-- 028_route_direction_fields.sql - direction fields
-- 029_route_sorting_indexes.sql - sorting indexes
-- 030_diverse_route_scenarios.sql - diverse demo routes
-- 031_complete_route_demo_fields.sql - legacy route backfill
-- 032_populate_route_04.sql - R-04 data
-- 033_route_integrity_and_timestamps.sql - constraints and updated_at trigger
+- просмотр заказов и информации о клиентах;
+- управление маршрутами и статусами доставки;
+- просмотр адресов и остановок маршрута;
+- создание счетов на основе заказов;
+- регистрация платежей;
+- экспорт отчётов;
+- проверка состояния сервиса через `/health`.
 
-## API v1
+## Технологии
 
-### Routes
+- Node.js и Express — сервер и REST API;
+- PostgreSQL — база данных;
+- PDFKit — создание PDF-документов;
+- XLSX — экспорт таблиц Excel;
+- встроенный Node.js Test Runner — тестирование.
 
-- GET /api/v1/routes - list routes (filter: ?status=active or inactive)
-- GET /api/v1/routes/:id/stops - paginated stops (filter: ?status=pending|delivered; params: limit 1-500 default 50, offset 0)
-- PATCH /api/v1/routes/:id - update (driverName, status, orderedOrderIds)
+## Запуск
 
-### Documents
-
-- POST /api/v1/invoices/from-order/:orderId
-- GET /api/v1/invoices
-- GET /api/v1/invoices/:id
-
-### Orders
-
-- GET /api/v1/orders
-
-### Clients
-
-- GET /api/v1/clients
-- GET /api/v1/clients/:id
-
-### Products
-
-- GET /api/v1/products
-
-### Reports
-
-- GET /api/v1/reports/aging
-- GET /api/v1/dashboard/summary
-
-### Exports
-
-- GET /api/v1/exports/report.csv
-- GET /api/v1/exports/report.xlsx
-
-### Health
-
-- GET /health -> { status: ok }
-
-## Route contract
-
-`json
-{
-  id: R-102,
-  routeCode: R-102,
-  name: Chișinău - Bălți Express,
-  driver: Ion Popescu,
-  status: В пути,
-  routeStatus: in_progress,
-  origin: { name: Depozit Central, address: str. Industrială 14, Chișinău },
-  destination: { name: Metalcom Bălți, address: str. Atelierelor 23, Bălți },
-  plannedStartAt: ...,
-  startedAt: ...,
-  completedAt: null,
-  createdAt: ...,
-  updatedAt: ...,
-  orderCount: 1,
-  totalAmount: 32400.00,
-  deliveredStopCount: 0,
-  pendingStopCount: 1,
-  stops: [ ... ]
-}
-`
-
-## Route Stop contract (GET /routes/:id/stops)
-
-`json
-{
-  total: 2,
-  items: [
-    {
-      id: 105,
-      routeId: 105,
-      orderId: 105,
-      orderNumber: ORD-DEMO-105,
-      stopOrder: 1,
-      status: pending,
-      amount: 22100.00,
-      createdAt: ...,
-      deliveredAt: null,
-      recipient: { id: 1, name: Fabrica Sud, address: ... },
-      sender: { id: 11, name: Materiale Sud SRL, address: ... },
-      goods: [ ... ]
-    }
-  ]
-}
-`
-
-## Technologies
-
-- express - HTTP server
-- pg - PostgreSQL client
-- pdfkit - PDF
-- xlsx - Excel export
-- node --test - built-in tests
-
-## Commands
-
-`ash
-npm test
+```bash
+npm install
 npm run migrate
 npm start
-`
+```
 
-## Ignored files
+После запуска сервер доступен на `http://localhost:3000`.
 
-.env, .env.*, node_modules/, ARCHITECTURE_IMPROVEMENTS.md, frontend-handoff.md, stderr*.txt, stdout*.txt, *.log, *.bak.
+## Основные адреса API
+
+- `GET /health` — проверка работы сервера;
+- `GET /api/v1/orders` — список заказов;
+- `GET /api/v1/clients` — список клиентов;
+- `GET /api/v1/routes` — список маршрутов;
+- `GET /api/v1/routes/:id/stops` — остановки маршрута;
+- `PATCH /api/v1/routes/:id` — изменение маршрута;
+- `GET /api/v1/invoices` — список счетов;
+- `GET /api/v1/dashboard/summary` — общая сводка;
+- `GET /api/v1/exports/report.csv` — экспорт отчёта в CSV;
+- `GET /api/v1/exports/report.xlsx` — экспорт отчёта в Excel.
+
+## Структура данных
+
+Основные данные проекта разделены по таблицам заказов, клиентов, товаров, счетов, платежей, маршрутов и остановок маршрутов. Изменения структуры базы данных оформлены SQL-миграциями в папке `migrations/`.
+
+## Тестирование
+
+```bash
+npm test
+```
