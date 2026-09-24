@@ -62,7 +62,11 @@ async function listSuppliers() {
   }
 }
 
-async function createOrder({ externalId = null, clientId, routeId = null, supplierId, items }) {
+async function createOrder({ externalId = null, clientId, routeId = null, supplierId, deliveryAddress, items }) {
+  if (typeof deliveryAddress !== 'string' || !deliveryAddress.trim()) {
+    throw new Error('DELIVERY_ADDRESS_REQUIRED');
+  }
+
   const client = await db.getClient();
 
   try {
@@ -101,10 +105,10 @@ async function createOrder({ externalId = null, clientId, routeId = null, suppli
     }
 
     const orderResult = await client.query(
-      `INSERT INTO orders (external_id, client_id, route_id, supplier_id, total_amount, status)
-       VALUES ($1, $2, $3, $4, 0, 'pending')
-       RETURNING id, external_id, client_id, route_id, supplier_id, total_amount, status, created_at`,
-      [externalId, clientId, routeId, supplierId]
+      `INSERT INTO orders (external_id, client_id, route_id, supplier_id, delivery_address, total_amount, status)
+       VALUES ($1, $2, $3, $4, $5, 0, 'pending')
+       RETURNING id, external_id, client_id, route_id, supplier_id, delivery_address, total_amount, status, created_at`,
+      [externalId, clientId, routeId, supplierId, deliveryAddress.trim()]
     );
     const order = orderResult.rows[0];
     const orderItems = [];
@@ -237,8 +241,12 @@ async function createInvoiceFromDeliveredOrder({ orderId, serie = 'INV' }) {
     }
 
     const buyerResult = await client.query(
-      'SELECT id, name, company_name, tax_id, address FROM clients WHERE id = $1',
-      [order.client_id]
+      `SELECT c.id, c.name, c.company_name, c.tax_id, c.address,
+              o.delivery_address
+       FROM clients c
+       JOIN orders o ON o.client_id = c.id
+       WHERE c.id = $1 AND o.id = $2`,
+      [order.client_id, order.id]
     );
     if (buyerResult.rowCount === 0) {
       throw new Error('CLIENT_NOT_FOUND');
@@ -300,7 +308,8 @@ async function createInvoiceFromDeliveredOrder({ orderId, serie = 'INV' }) {
           name: buyer.name,
           companyName: buyer.company_name,
           fiscalCode: buyer.tax_id,
-          address: buyer.address
+          address: buyer.address,
+          deliveryAddress: buyer.delivery_address
         }),
         subtotal,
         vatTotal,

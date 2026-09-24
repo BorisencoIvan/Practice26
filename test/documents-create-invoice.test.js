@@ -50,7 +50,7 @@ test('createInvoiceFromDeliveredOrder creates invoice for delivered order', asyn
     (sql) => (sql === 'BEGIN' ? { rowCount: 0, rows: [] } : undefined),
     (sql) => (sql.includes('FROM orders') ? { rowCount: 1, rows: [{ id: 7, client_id: 11, supplier_id: 2, status: 'delivered', total_amount: '230.50' }] } : undefined),
     (sql) => (sql.includes('FROM suppliers') ? { rowCount: 1, rows: [{ id: 2, legal_name: 'Supplier SRL', tax_id: '123', address: 'Street 1', bank_name: 'Bank', iban: 'MD00TEST' }] } : undefined),
-    (sql) => (sql.includes('FROM clients') ? { rowCount: 1, rows: [{ id: 11, name: 'Buyer SRL', company_name: 'Buyer SRL', tax_id: '456', address: 'Street 2' }] } : undefined),
+    (sql) => (sql.includes('FROM clients') ? { rowCount: 1, rows: [{ id: 11, name: 'Buyer SRL', company_name: 'Buyer SRL', tax_id: '456', address: 'Street 2', delivery_address: 'Delivery Street 3' }] } : undefined),
     (sql) => (sql.includes('SELECT id FROM invoices') ? { rowCount: 0, rows: [] } : undefined),
     (sql) => (sql.includes('FROM order_items') ? { rowCount: 1, rows: [{ product_id: 4, product_name: 'Cement', unit: 'bag', quantity: '2', unit_price: '100.00', vat_rate: '15', net_amount: '200.00', vat_amount: '30.00', total_amount: '230.00' }] } : undefined),
     (sql) => (sql.includes('INSERT INTO invoices') ? { rowCount: 1, rows: [{ id: 15, serie: 'INV', number: 101, order_id: 7, client_id: 11, total: '230.00', paid: '0.00', status: 'issued' }] } : undefined),
@@ -81,7 +81,8 @@ test('createInvoiceFromDeliveredOrder creates invoice for delivered order', asyn
     name: 'Buyer SRL',
     companyName: 'Buyer SRL',
     fiscalCode: '456',
-    address: 'Street 2'
+    address: 'Street 2',
+    deliveryAddress: 'Delivery Street 3'
   });
   assert.equal(queries[0].sql, 'BEGIN');
   assert.equal(queries[queries.length - 1].sql, 'COMMIT');
@@ -117,7 +118,7 @@ test('createOrder calculates VAT and persists selected product rows', async () =
     (sql) => (sql.includes('FROM suppliers') ? { rowCount: 1, rows: [{ id: 2, tax_id: 'SUPPLIER-TAX' }] } : undefined),
     (sql) => (sql.includes('FROM clients') ? { rowCount: 1, rows: [{ id: 11, tax_id: 'BUYER-TAX' }] } : undefined),
     (sql) => (sql.includes('FROM products') ? { rowCount: 1, rows: [{ id: 4, name: 'Cement', unit: 'bag', price: '100.00' }] } : undefined),
-    (sql) => (sql.includes('INSERT INTO orders') ? { rowCount: 1, rows: [{ id: 9, external_id: 'ORD-9', client_id: 11, supplier_id: 2, total_amount: '0.00', status: 'pending', created_at: new Date('2026-09-23T00:00:00Z') }] } : undefined),
+    (sql) => (sql.includes('INSERT INTO orders') ? { rowCount: 1, rows: [{ id: 9, external_id: 'ORD-9', client_id: 11, supplier_id: 2, delivery_address: 'Delivery Street 3', total_amount: '0.00', status: 'pending', created_at: new Date('2026-09-23T00:00:00Z') }] } : undefined),
     (sql) => (sql.includes('INSERT INTO order_items') ? { rowCount: 1, rows: [] } : undefined),
     (sql) => (sql.includes('UPDATE orders SET total_amount') ? { rowCount: 1, rows: [] } : undefined),
     (sql) => (sql === 'COMMIT' ? { rowCount: 0, rows: [] } : undefined)
@@ -129,14 +130,18 @@ test('createOrder calculates VAT and persists selected product rows', async () =
   const order = await createOrder({
     clientId: 11,
     supplierId: 2,
+    deliveryAddress: 'Delivery Street 3',
     items: [{ productId: 4, quantity: 2 }]
   });
 
   assert.equal(order.subtotal, '200.00');
   assert.equal(order.vat_total, '40.00');
   assert.equal(order.total_amount, '240.00');
+  assert.equal(order.delivery_address, 'Delivery Street 3');
   assert.equal(order.items[0].vatRate, 20);
   assert.ok(queries.some((query) => query.sql.includes('INSERT INTO order_items')));
+  const orderInsert = queries.find((query) => query.sql.includes('INSERT INTO orders'));
+  assert.equal(orderInsert.params[4], 'Delivery Street 3');
   assert.equal(client.released, true);
 });
 
@@ -153,7 +158,7 @@ test('createOrder rejects when supplier and buyer have the same tax ID', async (
   const { createOrder } = require('../src/modules/documents');
 
   await assert.rejects(
-    () => createOrder({ clientId: 11, supplierId: 2, items: [{ productId: 4, quantity: 1 }] }),
+    () => createOrder({ clientId: 11, supplierId: 2, deliveryAddress: 'Delivery Street 3', items: [{ productId: 4, quantity: 1 }] }),
     (error) => error.message === 'SUPPLIER_EQUALS_BUYER'
   );
   assert.equal(client.released, true);

@@ -35,9 +35,9 @@ function setDbClient(client) {
 test('registerPayment updates invoice paid amount and status', async () => {
   const client = makeClient([
     (sql) => (sql === 'BEGIN' ? { rowCount: 0, rows: [] } : undefined),
-    (sql) => (sql.includes('FROM invoices') ? { rowCount: 1, rows: [{ id: 15, client_id: 11, total: '230.50', paid: '120.00', status: 'partially_paid' }] } : undefined),
+    (sql) => (sql.includes('FROM invoices') && sql.includes('FOR UPDATE') ? { rowCount: 1, rows: [{ id: 15, client_id: 11, total: '230.50', paid: '120.00', status: 'partially_paid' }] } : undefined),
     (sql) => (sql.includes('INSERT INTO payments') ? { rowCount: 1, rows: [{ id: 7, invoice_id: 15, client_id: 11, amount: 110.5, payment_method: 'bank', reference: 'REF-1', paid_at: '2026-09-22T00:00:00.000Z' }] } : undefined),
-    (sql) => (sql.includes('UPDATE invoices SET paid') ? { rowCount: 1, rows: [] } : undefined),
+    (sql) => (sql.includes('FROM invoices') ? { rowCount: 1, rows: [{ id: 15, total: '230.50', paid: '230.50', status: 'paid' }] } : undefined),
     (sql) => (sql === 'COMMIT' ? { rowCount: 0, rows: [] } : undefined)
   ]);
 
@@ -115,7 +115,28 @@ test('listRoutes includes routes without orders', async () => {
   const client = makeClient([
     (sql, params) => (sql.includes('FROM routes r') ? {
       rowCount: 1,
-      rows: [{ id: 3, name: 'North', order_count: 5, active_order_count: params[0] === 'active' ? 2 : 0 }]
+      rows: [{
+        id: 3,
+        name: 'North Route',
+        driver_name: 'Ion Popescu',
+        route_status: 'in_progress',
+        order_count: 5,
+        stops_data: [{
+          id: 7,
+          orderId: 'ORD-7',
+          clientName: 'Alpha SRL',
+          recipientName: 'Alpha SRL',
+          recipientAddress: 'Strada Exemplu 10',
+          deliveryAddress: 'Strada Exemplu 10',
+          supplierName: 'Supplier SRL',
+          supplierAddress: 'Warehouse Street 1',
+          goods: [{ productId: 4, name: 'Cement', variant: '25 kg', unit: 'bag', quantity: 2, unitPrice: '50.00', vatRate: '20', amount: '120.00' }],
+          status: 'pending',
+          amount: '230.50',
+          createdAt: '2026-09-20T10:00:00.000Z',
+          deliveredAt: null
+        }]
+      }]
     } : undefined)
   ]);
 
@@ -125,7 +146,60 @@ test('listRoutes includes routes without orders', async () => {
   const { listRoutes } = require('../src/modules/reports');
   const [route] = await listRoutes({ status: 'active' });
 
-  assert.deepEqual(route, { id: 'R-03', driver: null, stops: 5, status: 'В пути' });
+  assert.deepEqual(route, {
+    id: 'R-03',
+    name: 'North Route',
+    driver: 'Ion Popescu',
+    orderCount: 5,
+    stops: [{
+      id: 7,
+      orderId: 'ORD-7',
+      clientName: 'Alpha SRL',
+      recipientName: 'Alpha SRL',
+      recipientAddress: 'Strada Exemplu 10',
+      deliveryAddress: 'Strada Exemplu 10',
+      supplierName: 'Supplier SRL',
+      supplierAddress: 'Warehouse Street 1',
+      goods: [{ productId: 4, name: 'Cement', variant: '25 kg', unit: 'bag', quantity: 2, unitPrice: '50.00', vatRate: '20', amount: '120.00' }],
+      status: 'pending',
+      amount: '230.50',
+      createdAt: '2026-09-20T10:00:00.000Z',
+      deliveredAt: null,
+      statusLabel: 'Ожидает доставки'
+    }],
+    routeStatus: 'in_progress',
+    status: 'В пути'
+  });
+  assert.equal(client.released, true);
+});
+
+test('updateRoute persists driver, status, and complete stop ordering transactionally', async () => {
+  const statements = [];
+  const client = makeClient([
+    (sql, params) => {
+      statements.push({ sql, params });
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rowCount: 0, rows: [] };
+      if (sql.includes('UPDATE routes')) return { rowCount: 1, rows: [{ id: 3 }] };
+      if (sql.includes('SELECT id FROM orders')) return { rowCount: 2, rows: [{ id: 8 }, { id: 9 }] };
+      if (sql.includes('UPDATE orders SET stop_order')) return { rowCount: 1, rows: [] };
+      return undefined;
+    }
+  ]);
+
+  setDbClient(client);
+  delete require.cache[require.resolve('../src/modules/reports')];
+
+  const { updateRoute } = require('../src/modules/reports');
+  const result = await updateRoute({
+    routeId: 3,
+    driverName: 'Ion Popescu',
+    status: 'in_progress',
+    orderedOrderIds: [9, 8]
+  });
+
+  assert.deepEqual(result, { id: 3 });
+  assert.deepEqual(statements.filter(({ sql }) => sql.includes('UPDATE orders SET stop_order')).map(({ params }) => params.slice(0, 2)), [[9, 1], [8, 2]]);
+  assert.equal(statements.some(({ sql }) => sql === 'COMMIT'), true);
   assert.equal(client.released, true);
 });
 

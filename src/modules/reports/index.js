@@ -246,23 +246,220 @@ async function listRoutes({ status } = {}) {
 
   try {
     const result = await client.query(`
-      SELECT r.id, r.name, COUNT(o.id)::int AS order_count,
-             COUNT(o.id) FILTER (WHERE o.status <> 'delivered')::int AS active_order_count
+      SELECT r.id, r.name, r.route_code, r.driver_name, r.status AS route_status,
+             r.origin_name, r.origin_address, r.destination_name, r.destination_address,
+             r.planned_start_at, r.estimated_arrival_at,
+             r.created_at, r.started_at, r.completed_at, r.updated_at,
+             r.stop_count, r.total_amount, r.delivered_stop_count,
+             r.pending_stop_count,
+             COALESCE(
+               jsonb_agg(jsonb_build_object(
+                 'id', rs.order_id,
+                 'orderId', rs.order_number,
+                 'clientName', rs.recipient_name,
+                 'recipientName', rs.recipient_name,
+                 'recipientAddress', rs.recipient_address,
+                 'deliveryAddress', rs.recipient_address,
+                 'supplierName', rs.sender_name,
+                 'supplierAddress', rs.sender_address,
+                 'goods', COALESCE((
+                   SELECT jsonb_agg(jsonb_build_object(
+                     'productId', oi.product_id,
+                     'name', oi.product_name,
+                     'variant', oi.product_variant,
+                     'unit', oi.unit,
+                     'quantity', oi.quantity,
+                     'unitPrice', oi.unit_price,
+                     'vatRate', oi.vat_rate,
+                     'amount', oi.total_amount
+                   ) ORDER BY oi.id)
+                   FROM order_items oi WHERE oi.order_id = rs.order_id
+                 ), '[]'::jsonb),
+                 'status', rs.order_status,
+                 'amount', rs.order_amount,
+                 'createdAt', rs.order_created_at,
+                 'deliveredAt', rs.delivered_at,
+                 'stopOrder', rs.stop_order
+               ) ORDER BY rs.stop_order NULLS LAST, rs.order_created_at, rs.order_id)
+               FILTER (WHERE rs.id IS NOT NULL),
+               '[]'::jsonb
+             ) AS stops_data
       FROM routes r
-      LEFT JOIN orders o ON o.route_id = r.id
-      GROUP BY r.id, r.name
-      HAVING ($1::text IS NULL)
-          OR ($1 = 'active' AND COUNT(o.id) FILTER (WHERE o.status <> 'delivered') > 0)
-          OR ($1 = 'inactive' AND COUNT(o.id) FILTER (WHERE o.status <> 'delivered') = 0)
-      ORDER BY r.name ASC, r.id ASC
+      LEFT JOIN route_stops rs ON rs.route_id = r.id
+      WHERE ($1::text IS NULL)
+         OR ($1 = 'active' AND r.status <> 'completed')
+         OR ($1 = 'inactive' AND r.status = 'completed')
+      GROUP BY r.id, r.name, r.driver_name, r.status
+      ORDER BY
+        CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END ASC,
+        CASE r.status
+          WHEN 'in_progress' THEN 1
+          WHEN 'planned' THEN 2
+          WHEN 'completed' THEN 3
+          ELSE 4
+        END ASC,
+        r.name ASC,
+        r.id ASC
     `, [status || null]);
 
-    return result.rows.map((row) => ({
-      id: `R-${String(row.id).padStart(2, '0')}`,
-      driver: null,
-      stops: Number(row.order_count || 0),
-      status: Number(row.active_order_count || 0) > 0 ? 'В пути' : 'Свободен'
-    }));
+    return result.rows.map((row) => {
+      const stops = Array.isArray(row.stops_data) ? row.stops_data : [];
+      const labels = { planned: 'Запланирован', in_progress: 'В пути', completed: 'Завершён' };
+      return {
+        id: `R-${String(row.id).padStart(2, '0')}`,
+        name: row.name,
+        ...(row.route_code !== undefined ? {
+          routeCode: row.route_code,
+          origin: {
+            name: row.origin_name,
+            address: row.origin_address
+          },
+          destination: {
+            name: row.destination_name,
+            address: row.destination_address
+          },
+          plannedStartAt: row.planned_start_at,
+          estimatedArrivalAt: row.estimated_arrival_at
+        } : {}),
+        driver: row.driver_name,
+        ...(row.created_at !== undefined ? {
+          createdAt: row.created_at,
+          startedAt: row.started_at,
+          completedAt: row.completed_at,
+          updatedAt: row.updated_at
+        } : {}),
+        orderCount: Number(row.stop_count ?? row.order_count ?? 0),
+        ...(row.total_amount !== undefined ? {
+          totalAmount: row.total_amount,
+          deliveredStopCount: Number(row.delivered_stop_count || 0),
+          pendingStopCount: Number(row.pending_stop_count || 0)
+        } : {}),
+        stops: stops.map((stop) => ({
+          ...stop,
+          statusLabel: stop.status === 'delivered' ? 'Доставлен' : 'Ожидает доставки'
+        })),
+        routeStatus: row.route_status,
+        status: labels[row.route_status] || row.route_status
+      };
+    });
+  } finally {
+    client.release();
+  }
+}
+
+async function listRouteStops({ routeId, status, limit = 50, offset = 0 }) {
+  const client = await db.getClient();
+
+  try {
+    const result = await client.query(`
+      SELECT
+        rs.id,
+        rs.route_id,
+        rs.order_id,
+        rs.stop_order,
+        rs.order_number,
+        rs.order_status,
+        rs.order_amount,
+        rs.order_created_at,
+        rs.delivered_at,
+        rs.recipient_id,
+        rs.recipient_name,
+        rs.recipient_address,
+        rs.supplier_id,
+        rs.sender_name,
+        rs.sender_address,
+        COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'productId', oi.product_id,
+            'name', oi.product_name,
+            'variant', oi.product_variant,
+            'unit', oi.unit,
+            'quantity', oi.quantity,
+            'unitPrice', oi.unit_price,
+            'vatRate', oi.vat_rate,
+            'amount', oi.total_amount
+          ) ORDER BY oi.id)
+          FROM order_items oi
+          WHERE oi.order_id = rs.order_id
+        ), '[]'::jsonb) AS goods,
+        COUNT(*) OVER ()::int AS total_count
+      FROM route_stops rs
+      WHERE rs.route_id = $1
+        AND ($2::text IS NULL OR rs.order_status = $2)
+      ORDER BY rs.stop_order NULLS LAST, rs.order_created_at, rs.order_id
+      LIMIT $3 OFFSET $4
+    `, [routeId, status || null, limit, offset]);
+
+    return {
+      total: result.rows[0] ? result.rows[0].total_count : 0,
+      items: result.rows.map((row) => ({
+        id: row.id,
+        routeId: row.route_id,
+        orderId: row.order_id,
+        orderNumber: row.order_number,
+        stopOrder: row.stop_order,
+        status: row.order_status,
+        amount: row.order_amount,
+        createdAt: row.order_created_at,
+        deliveredAt: row.delivered_at,
+        recipient: {
+          id: row.recipient_id,
+          name: row.recipient_name,
+          address: row.recipient_address
+        },
+        sender: {
+          id: row.supplier_id,
+          name: row.sender_name,
+          address: row.sender_address
+        },
+        goods: row.goods
+      }))
+    };
+  } finally {
+    client.release();
+  }
+}
+
+async function updateRoute({ routeId, driverName, status, orderedOrderIds }) {
+  const client = await db.getClient();
+
+  try {
+    await client.query('BEGIN');
+    const routeResult = await client.query(
+      `UPDATE routes
+       SET driver_name = CASE WHEN $2::boolean THEN $3::text ELSE driver_name END,
+           status = CASE WHEN $4::boolean THEN $5::text ELSE status END
+       WHERE id = $1
+       RETURNING id`,
+      [routeId, driverName !== undefined, driverName === undefined ? null : driverName, status !== undefined, status || null]
+    );
+    if (!routeResult.rowCount) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    if (orderedOrderIds !== undefined) {
+      const ordersResult = await client.query(
+        'SELECT id FROM orders WHERE route_id = $1 FOR UPDATE',
+        [routeId]
+      );
+      const routeOrderIds = new Set(ordersResult.rows.map((order) => Number(order.id)));
+      if (orderedOrderIds.length !== routeOrderIds.size
+          || new Set(orderedOrderIds).size !== orderedOrderIds.length
+          || orderedOrderIds.some((id) => !routeOrderIds.has(id))) {
+        await client.query('ROLLBACK');
+        return { invalidStops: true };
+      }
+      for (let index = 0; index < orderedOrderIds.length; index += 1) {
+        await client.query('UPDATE orders SET stop_order = $2 WHERE id = $1 AND route_id = $3', [orderedOrderIds[index], index + 1, routeId]);
+      }
+    }
+
+    await client.query('COMMIT');
+    return { id: routeId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }
@@ -305,7 +502,8 @@ async function getInvoiceById(invoiceId) {
                   SELECT i.id, i.serie, i.number, i.order_id, o.external_id AS order_external_id,
                     i.client_id, i.issued_at, i.due_at, i.subtotal, i.vat_total, i.total,
                     i.paid, i.status, i.supplier_snapshot, i.client_snapshot,
-              c.name AS client_name, c.company_name, c.tax_id, c.address AS client_address
+              c.name AS client_name, c.company_name, c.tax_id, c.address AS client_address,
+              o.delivery_address
       FROM invoices i
       LEFT JOIN clients c ON c.id = i.client_id
                   LEFT JOIN orders o ON o.id = i.order_id
@@ -319,11 +517,22 @@ async function getInvoiceById(invoiceId) {
     const invoice = result.rows[0];
     const itemsResult = await client.query(`
             SELECT line_number, product_id, product_name, product_variant, unit, quantity, unit_price, vat_rate,
-              net_amount, vat_amount, total_amount, is_demo
+              net_amount, vat_amount, total_amount
       FROM invoice_items
       WHERE invoice_id = $1
       ORDER BY id
     `, [Number(invoiceId)]);
+
+    const clientSnapshot = invoice.client_snapshot || {};
+    const clientData = Object.keys(clientSnapshot).length > 0
+      ? clientSnapshot
+      : {
+          name: invoice.client_name,
+          companyName: invoice.company_name,
+          fiscalCode: invoice.tax_id,
+          address: invoice.client_address
+        };
+    const deliveryAddress = clientData.deliveryAddress || clientData.delivery_address || invoice.delivery_address || null;
 
     return {
       id: Number(invoice.id),
@@ -345,13 +554,10 @@ async function getInvoiceById(invoiceId) {
         accountNumber: invoice.supplier_snapshot?.iban || '',
         currentAccount: invoice.supplier_snapshot?.iban || ''
       },
-      client: invoice.client_snapshot && Object.keys(invoice.client_snapshot).length > 0
-        ? invoice.client_snapshot
-        : {
-        name: invoice.client_name,
-        companyName: invoice.company_name,
-        fiscalCode: invoice.tax_id,
-        address: invoice.client_address
+      client: {
+        ...clientData,
+        deliveryAddress,
+        delivery_address: deliveryAddress
       },
       items: itemsResult.rows.map((item) => ({
         lineNumber: Number(item.line_number),
@@ -443,6 +649,8 @@ module.exports = {
   listInvoices,
   listOrders,
   listRoutes,
+  listRouteStops,
+  updateRoute,
   listProducts,
   getInvoiceById,
   getAgingReport,

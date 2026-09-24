@@ -35,6 +35,7 @@ function buildPdfBufferFromInvoice(invoice) {
       doc.text(`Buyer: ${invoice.client.companyName || invoice.client.name || ''}`);
       doc.text(`Buyer tax ID: ${invoice.client.fiscalCode || ''}`);
       doc.text(`Buyer address: ${invoice.client.address || ''}`);
+      doc.text(`Delivery address: ${invoice.client.deliveryAddress || ''}`);
       doc.moveDown();
     }
 
@@ -70,29 +71,11 @@ async function generateInvoicePdf(invoiceId) {
   return buildPdfBufferFromInvoice(invoice);
 }
 
-async function generateDeliveryNotePdf() {
-  return buildPdfBufferFromInvoice({
-    serie: 'DN',
-    number: 1,
-    order_id: 0,
-    client_id: 0,
-    issued_at: new Date().toISOString(),
-    due_at: new Date().toISOString(),
-    total: '0.00',
-    paid: '0.00',
-    status: 'issued',
-    items: [
-      { name: 'Delivery note placeholder', qty: 1, priceWithoutVat: 0 }
-    ]
-  });
-}
-
 function getPdfModuleInfo() {
   return moduleBoundaries.pdf;
 }
 
 module.exports = {
   generateInvoicePdf,
-  generateDeliveryNotePdf,
   getPdfModuleInfo
 };

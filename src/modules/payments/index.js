@@ -49,9 +49,6 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
       throw new Error('PAYMENT_EXCEEDS_INVOICE_TOTAL');
     }
 
-    const nextPaid = currentPaid + normalizedAmount;
-    const nextStatus = nextPaid >= total ? 'paid' : 'partially_paid';
-
     const paymentResult = await client.query(
       `INSERT INTO payments (invoice_id, client_id, amount, payment_method, reference, paid_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
@@ -59,20 +56,23 @@ async function registerPayment({ invoiceId, clientId, amount, paymentMethod = 'b
       [normalizedInvoiceId, Number(invoice.client_id), normalizedAmount, paymentMethod, reference]
     );
 
-    await client.query(
-      'UPDATE invoices SET paid = $1, status = $2 WHERE id = $3',
-      [nextPaid, nextStatus, normalizedInvoiceId]
+    // paid/status пересчитывает DB-триггер payments_recalc_invoice — читаем итог
+    const updatedInvoice = await client.query(
+      'SELECT id, total, paid, status FROM invoices WHERE id = $1',
+      [normalizedInvoiceId]
     );
 
     await client.query('COMMIT');
 
+    const final = updatedInvoice.rows[0];
+
     return {
       payment: paymentResult.rows[0],
       invoice: {
-        id: invoice.id,
-        total: total.toFixed(2),
-        paid: nextPaid.toFixed(2),
-        status: nextStatus
+        id: final.id,
+        total: Number(final.total).toFixed(2),
+        paid: Number(final.paid).toFixed(2),
+        status: final.status
       }
     };
   } catch (error) {

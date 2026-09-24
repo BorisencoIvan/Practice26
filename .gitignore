@@ -8,3 +8,4 @@ node_modules/
 stderr*.txt
 stdout*.txt
 frontend-handoff.md
+ARCHITECTURE_IMPROVEMENTS.md

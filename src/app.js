@@ -13,6 +13,8 @@ const {
   getClientById,
   listOrders,
   listRoutes,
+  listRouteStops,
+  updateRoute,
   listProducts,
   listInvoices,
   getInvoiceById,
@@ -20,7 +22,7 @@ const {
 } = require('./modules/reports');
 const { registerPayment } = require('./modules/payments');
 const { generateInvoicePdf } = require('./modules/pdf');
-const { buildReportCsv, buildReportXlsx } = require('./modules/exports');
+const { buildReportCsv, buildReportXlsx, buildSalesCsv, buildSalesXlsx, buildAgingCsv, buildAgingXlsx } = require('./modules/exports');
 const telemetry = require('./shared/telemetry');
 const monitorPage = require('./shared/monitor-page');
 const db = require('./db');
@@ -182,6 +184,7 @@ apiRouter.post('/orders', async (req, res) => {
   const clientId = Number(body.clientId);
   const supplierId = Number(body.supplierId);
   const routeId = body.routeId == null ? null : Number(body.routeId);
+  const deliveryAddress = body.deliveryAddress;
   const items = body.items;
 
   if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isInteger(supplierId) || supplierId <= 0) {
@@ -189,6 +192,9 @@ apiRouter.post('/orders', async (req, res) => {
   }
   if (routeId !== null && (!Number.isInteger(routeId) || routeId <= 0)) {
     return res.status(422).json({ error: 'routeId must be a positive integer', code: 'INVALID_ROUTE_ID' });
+  }
+  if (typeof deliveryAddress !== 'string' || !deliveryAddress.trim()) {
+    return res.status(422).json({ error: 'deliveryAddress is required', code: 'DELIVERY_ADDRESS_REQUIRED' });
   }
   if (!Array.isArray(items) || items.length === 0 || items.some((item) =>
     !Number.isInteger(Number(item.productId)) || Number(item.productId) <= 0 ||
@@ -204,6 +210,7 @@ apiRouter.post('/orders', async (req, res) => {
       clientId,
       routeId,
       supplierId,
+      deliveryAddress,
       items
     });
     return res.status(201).json(order);
@@ -243,6 +250,64 @@ apiRouter.get('/routes', async (req, res) => {
     return res.status(422).json({ error: 'status must be active or inactive', code: 'INVALID_ROUTE_STATUS' });
   }
   return res.json(await listRoutes({ status: req.query.status }));
+});
+
+apiRouter.get('/routes/:id/stops', async (req, res) => {
+  const routeId = Number(req.params.id);
+  const { status } = req.query;
+  const limit = req.query.limit === undefined ? 50 : Number.parseInt(req.query.limit, 10);
+  const offset = req.query.offset === undefined ? 0 : Number.parseInt(req.query.offset, 10);
+
+  if (!Number.isInteger(routeId) || routeId <= 0) {
+    return res.status(422).json({ error: 'Route id must be a positive integer', code: 'INVALID_ROUTE_ID' });
+  }
+  if (status !== undefined && !['pending', 'delivered'].includes(status)) {
+    return res.status(422).json({ error: 'status must be pending or delivered', code: 'INVALID_STOP_STATUS' });
+  }
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 500) {
+    return res.status(422).json({ error: 'limit must be an integer between 1 and 500', code: 'INVALID_LIMIT' });
+  }
+  if (!Number.isInteger(offset) || offset < 0) {
+    return res.status(422).json({ error: 'offset must be a non-negative integer', code: 'INVALID_OFFSET' });
+  }
+
+  const result = await listRouteStops({ routeId, status, limit, offset });
+  return res.json(result);
+});
+
+apiRouter.patch('/routes/:id', async (req, res) => {
+  const routeId = Number(req.params.id);
+  const { driverName, status, orderedOrderIds } = req.body || {};
+  const validStatuses = ['planned', 'in_progress', 'completed'];
+
+  if (!Number.isInteger(routeId) || routeId <= 0) {
+    return res.status(422).json({ error: 'Route id must be a positive integer', code: 'INVALID_ROUTE_ID' });
+  }
+  if (driverName !== undefined && driverName !== null && (typeof driverName !== 'string' || !driverName.trim())) {
+    return res.status(422).json({ error: 'driverName must be a non-empty string or null', code: 'INVALID_DRIVER_NAME' });
+  }
+  if (status !== undefined && !validStatuses.includes(status)) {
+    return res.status(422).json({ error: 'status must be planned, in_progress, or completed', code: 'INVALID_ROUTE_STATUS' });
+  }
+  if (orderedOrderIds !== undefined && (!Array.isArray(orderedOrderIds)
+      || orderedOrderIds.some((id) => !Number.isInteger(id) || id <= 0))) {
+    return res.status(422).json({ error: 'orderedOrderIds must be an array of positive order IDs', code: 'INVALID_ROUTE_STOPS' });
+  }
+  if (driverName === undefined && status === undefined && orderedOrderIds === undefined) {
+    return res.status(422).json({ error: 'At least one route field is required', code: 'EMPTY_ROUTE_UPDATE' });
+  }
+
+  const updated = await updateRoute({
+    routeId,
+    driverName: driverName === null ? null : driverName === undefined ? undefined : driverName.trim(),
+    status,
+    orderedOrderIds
+  });
+  if (!updated) return res.status(404).json({ error: 'Route not found', code: 'ROUTE_NOT_FOUND' });
+  if (updated.invalidStops) {
+    return res.status(422).json({ error: 'orderedOrderIds must list every order in this route exactly once', code: 'INVALID_ROUTE_STOPS' });
+  }
+  return res.json((await listRoutes()).find((route) => route.id === `R-${String(routeId).padStart(2, '0')}`));
 });
 
 apiRouter.get('/products', async (req, res) => {
@@ -285,24 +350,98 @@ apiRouter.get('/invoices/:id/pdf', async (req, res) => {
   }
 });
 
-apiRouter.get('/exports/report.csv', async (req, res) => {
-  const csv = await buildReportCsv({
-    from: req.query.from,
-    to: req.query.to
-  });
+apiRouter.get('/exports/sales.csv', async (req, res) => {
+  let csv;
+  try {
+    csv = await buildSalesCsv({ from: req.query.from, to: req.query.to, columns: req.query.columns || req.query['columns[]'] || req.query.selectedColumns || req.query['selectedColumns[]'] || req.query.fields });
+  } catch (error) {
+    if (error.message === 'INVALID_EXPORT_COLUMNS') {
+      return res.status(422).json({ error: 'Invalid or empty export columns', code: 'INVALID_EXPORT_COLUMNS' });
+    }
+    throw error;
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="sales.csv"');
+  return res.send(csv);
+});
+
+apiRouter.get('/exports/sales.xlsx', async (req, res) => {
+  let workbookBuffer;
+  try {
+    workbookBuffer = await buildSalesXlsx({ from: req.query.from, to: req.query.to, columns: req.query.columns || req.query['columns[]'] || req.query.selectedColumns || req.query['selectedColumns[]'] || req.query.fields });
+  } catch (error) {
+    if (error.message === 'INVALID_EXPORT_COLUMNS') {
+      return res.status(422).json({ error: 'Invalid or empty export columns', code: 'INVALID_EXPORT_COLUMNS' });
+    }
+    throw error;
+  }
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="sales.xlsx"');
+  return res.send(workbookBuffer);
+});
+
+apiRouter.get('/exports/aging-report.csv', async (req, res) => {
+  const csv = await buildReportCsv({ from: req.query.from, to: req.query.to });
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="aging-report.csv"');
   return res.send(csv);
 });
 
-apiRouter.get('/exports/report.xlsx', async (req, res) => {
-  const workbookBuffer = await buildReportXlsx({
-    from: req.query.from,
-    to: req.query.to
-  });
+apiRouter.get('/exports/aging-report.xlsx', async (req, res) => {
+  const workbookBuffer = await buildReportXlsx({ from: req.query.from, to: req.query.to });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="aging-report.xlsx"');
   return res.send(workbookBuffer);
+});
+
+function getExportColumns(query) {
+  const names = ['columns', 'columns[]', 'selectedColumns', 'selectedColumns[]', 'fields', 'selected', 'exportColumns', 'export_columns'];
+  for (const name of names) {
+    if (Object.hasOwn(query, name)) return query[name];
+  }
+  return undefined;
+}
+
+function isDebtExport(query) {
+  if (['debts', 'debt', 'aging', 'aging-report'].includes(String(query.type || '').toLowerCase())) return true;
+  const columns = getExportColumns(query);
+  const requested = (Array.isArray(columns) ? columns : [columns])
+    .filter((value) => typeof value === 'string')
+    .flatMap((value) => value.replace(/[\[\]"']/g, '').split(','))
+    .map((value) => value.trim().toLowerCase());
+  return requested.some((column) => ['total_debt', 'debt', 'due_date', 'days_overdue', 'aging_bucket', 'last_payment_date'].includes(column));
+}
+
+apiRouter.get('/exports/report.csv', async (req, res) => {
+  const options = { from: req.query.from, to: req.query.to, columns: getExportColumns(req.query) };
+  try {
+    const debts = isDebtExport(req.query);
+    const csv = debts ? await buildAgingCsv(options) : await buildSalesCsv(options);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${debts ? 'debts' : 'sales'}.csv"`);
+    return res.send(csv);
+  } catch (error) {
+    if (error.message === 'INVALID_EXPORT_COLUMNS') {
+      return res.status(422).json({ error: 'Invalid or empty export columns', code: 'INVALID_EXPORT_COLUMNS' });
+    }
+    throw error;
+  }
+});
+
+apiRouter.get('/exports/report.xlsx', async (req, res) => {
+  const options = { from: req.query.from, to: req.query.to, columns: getExportColumns(req.query) };
+  try {
+    const debts = isDebtExport(req.query);
+    const workbookBuffer = debts ? await buildAgingXlsx(options) : await buildSalesXlsx(options);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${debts ? 'debts' : 'sales'}.xlsx"`);
+    return res.send(workbookBuffer);
+  } catch (error) {
+    if (error.message === 'INVALID_EXPORT_COLUMNS') {
+      return res.status(422).json({ error: 'Invalid or empty export columns', code: 'INVALID_EXPORT_COLUMNS' });
+    }
+    throw error;
+  }
 });
 
 apiRouter.post('/payments', async (req, res) => {

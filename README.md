@@ -86,6 +86,23 @@ The project now exposes a versioned API under `/api/v1` and keeps the legacy non
 - `GET /api/v1/invoices/:id`
 - Response includes full invoice payload for PDF and preview rendering.
 
+### Routes
+- `GET /api/v1/routes`
+- Optional filter: `?status=active` returns routes not marked completed; `?status=inactive` returns completed routes.
+- Routes are sorted by default with active routes first (`in_progress`, then `planned`), completed routes last, and then by route name. Stops are sorted by route, `stop_order`, creation time, and ID.
+- Each route includes its display ID, database name, assigned driver, status (`planned`, `in_progress`, or `completed`), order count, and ordered `stops` array. Each stop represents an order and includes its database ID and display ID, recipient name/address, supplier name/address, goods (product name/variant/unit/quantity/price/VAT/line amount), order status/label, order amount, creation time, and delivery time.
+- `PATCH /api/v1/routes/:id` updates route details. Body may include `driverName` (string or `null`), `status` (`planned`, `in_progress`, `completed`), and/or `orderedOrderIds` (all order database IDs on that route, each exactly once, in the desired stop order).
+- `routes` is the complete route registry: active and completed routes remain in this table, with route code, name, origin, destination, driver, status, lifecycle/planning timestamps, stop count, total amount, and delivered/pending stop counts. `route_stops` contains the stops belonging to every route, including completed routes; recipient/sender fields are separate columns and goods remain in `order_items`. Use `?status=active` for active routes or `?status=inactive` for completed routes. Migration `028_route_direction_fields.sql` adds and populates route direction fields; `029_route_sorting_indexes.sql` adds sorting indexes.
+- Migration `030_diverse_route_scenarios.sql` adds varied demo routes: planned, in-progress, completed, empty, single-stop, and multi-stop routes with different drivers, suppliers, recipients, addresses, amounts, and delivery statuses.
+- Migration `031_complete_route_demo_fields.sql` backfills route direction, driver, planned-start, and estimated-arrival fields for legacy demo routes.
+- `GET /api/v1/routes/:id/stops` returns paginated stops for one route. Optional query parameters: `status=pending|delivered`, `limit` (1-500, default 50), and `offset` (default 0). The response is `{ total, items }`.
+- Migration `033_route_integrity_and_timestamps.sql` enforces unique route codes, valid stop amounts/status/order, chronological route dates, unique stop positions, and automatic `routes.updated_at` updates.
+
+### Debt export
+- `GET /api/v1/exports/report.xlsx` and `/api/v1/exports/report.csv` recognize debt-report columns (`total_debt`, `due_date`, `days_overdue`, `aging_bucket`, `last_payment_date`) and return one row per unpaid invoice. Existing sales column selections continue to return sales exports.
+- Select columns with `columns`, `selectedColumns`, or `fields`; supported debt fields are `id`, `client`, `total_debt`, `due_date`, `days_overdue`, `aging_bucket`, `last_payment_date`, `manager`, and `status`.
+- Optional `from` and `to` dates filter by invoice due date, inclusively.
+
 ### Aging report for all frontends
 - `GET /api/v1/reports/aging`
 - Response example:
