@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://speakers-leon-solar-lucas.trycloudflare.com/',
+        target: 'https://column-philadelphia-jason-depending.trycloudflare.com/',
         changeOrigin: true,
       }
     }

@@ -1,4 +1,3 @@
-// src/components/Documents/InvoiceTemplate.jsx
 import { format } from 'date-fns';
 import { amountToWordsMDL } from '../../utils/numberToWords';
 import './InvoiceTemplate.css';
@@ -6,16 +5,7 @@ import './InvoiceTemplate.css';
 export const InvoiceTemplate = ({ invoiceData, supplierInfo }) => {
   if (!invoiceData) return <div>Загрузка данных счёта...</div>;
 
- const {
-serie,
-number,
-order_id,
-client,
-issued_at,
-due_at,
-items = [],
-} = invoiceData;
-
+  const { serie, number, order_id, client, issued_at, due_at, items = [] } = invoiceData;
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -26,27 +16,20 @@ items = [],
     const qty = Number(item.qty) || 0;
     const price = Number(item.priceWithoutVat) || 0;
     const vatRate = Number(item.vatRate) || 0;
-
     const sumWithoutVat = qty * price;
     const vatAmount = sumWithoutVat * (vatRate / 100);
-    const totalItemSum = sumWithoutVat + vatAmount;
 
-    return {
-      ...item,
-      sumWithoutVat,
-      vatAmount,
-      totalItemSum
-    };
+    return { ...item, sumWithoutVat, vatAmount, totalItemSum: sumWithoutVat + vatAmount };
   });
 
-  const subtotalWithoutVat = calculatedItems.reduce((acc, i) => acc + i.sumWithoutVat, 0);
-  const totalVat = calculatedItems.reduce((acc, i) => acc + i.vatAmount, 0);
+  const subtotalWithoutVat = calculatedItems.reduce((acc, item) => acc + item.sumWithoutVat, 0);
+  const totalVat = calculatedItems.reduce((acc, item) => acc + item.vatAmount, 0);
   const grandTotal = subtotalWithoutVat + totalVat;
 
   return (
     <div className="invoice-container">
       <div className="no-print actions-bar">
-        <button onClick={() => window.print()} className="print-btn">
+        <button type="button" onClick={() => window.print()} className="print-btn">
           🖨️ Распечатать / Сохранить в PDF
         </button>
       </div>
@@ -70,32 +53,14 @@ items = [],
 
         <section className="invoice-parties">
           <div className="party supplier">
-  <h3>Продавец (Поставщик):</h3>
-
-  <p>
-    <strong>{supplierInfo?.name}</strong>
-  </p>
-
-  <p>
-    Контактное лицо: {supplierInfo?.contactPerson}
-  </p>
-
-  <p>
-    Фискальный код/ИНН: {supplierInfo?.fiscalCode}
-  </p>
-
-  <p>
-    Адрес: {supplierInfo?.address}
-  </p>
-
-  <p>
-    Банк: {supplierInfo?.bankName}
-  </p>
-
-  <p>
-    р/с: {supplierInfo?.bankAccount}
-  </p>
-</div>ы
+            <h3>Продавец (Поставщик):</h3>
+            <p><strong>{supplierInfo?.legalName || '-'}</strong></p>
+            <p>Контактное лицо: {supplierInfo?.contactPerson || '-'}</p>
+            <p>Фискальный код/ИНН: {supplierInfo?.fiscalCode || '-'}</p>
+            <p>Адрес: {supplierInfo?.address || '-'}</p>
+            <p>Банк: {supplierInfo?.bankName || '-'}</p>
+            <p>р/с: {supplierInfo?.iban || '-'}</p>
+          </div>
 
           <div className="party client">
             <h3>Покупатель (Клиент):</h3>
@@ -109,32 +74,19 @@ items = [],
         <table className="invoice-table">
           <thead>
             <tr>
-              <th>№</th>
-              <th>Наименование товара / услуги</th>
-              <th>Ед. изм.</th>
-              <th>Кол-во</th>
-              <th>Цена без НДС</th>
-              <th>НДС %</th>
-              <th>Сумма НДС</th>
-              <th>Всего с НДС</th>
+              <th>№</th><th>Наименование товара / услуги</th><th>Ед. изм.</th><th>Кол-во</th>
+              <th>Цена без НДС</th><th>НДС %</th><th>Сумма НДС</th><th>Всего с НДС</th>
             </tr>
           </thead>
           <tbody>
             {calculatedItems.map((item, index) => (
-                <tr key={index}>
-                <td>{index + 1}</td>
-                <td>{item.name}</td>
-                <td>{item.unit || 'шт'}</td>
-                <td>{item.qty}</td>
-
+              <tr key={index}>
+                <td>{index + 1}</td><td>{item.name}</td><td>{item.unit || 'шт'}</td><td>{item.qty}</td>
                 <td>{(Number(item.priceWithoutVat) || 0).toFixed(2)} MDL</td>
-
                 <td>{item.vatRate}%</td>
-
                 <td>{(Number(item.vatAmount) || 0).toFixed(2)} MDL</td>
-
                 <td>{(Number(item.totalItemSum) || 0).toFixed(2)} MDL</td>
-                 </tr>
+              </tr>
             ))}
           </tbody>
         </table>
@@ -144,32 +96,18 @@ items = [],
             <p><strong>Сумма прописью:</strong></p>
             <p className="words-box">{amountToWordsMDL(grandTotal)}</p>
           </div>
-
           <div className="totals-numbers">
-            <div className="row">
-              <span>Сумма без НДС:</span>
-              <span>{subtotalWithoutVat.toFixed(2)} MDL</span>
-            </div>
-            <div className="row">
-              <span>Всего НДС:</span>
-              <span>{totalVat.toFixed(2)} MDL</span>
-            </div>
-            <div className="row grand-total">
-              <span>Итого к оплате:</span>
-              <span>{grandTotal.toFixed(2)} MDL</span>
-            </div>
+            <div className="row"><span>Сумма без НДС:</span><span>{subtotalWithoutVat.toFixed(2)} MDL</span></div>
+            <div className="row"><span>Всего НДС:</span><span>{totalVat.toFixed(2)} MDL</span></div>
+            <div className="row grand-total"><span>Итого к оплате:</span><span>{grandTotal.toFixed(2)} MDL</span></div>
           </div>
         </section>
 
         <footer className="invoice-signatures">
-          <div className="sig-block">
-            <span>Выдал (Поставщик): ___________________</span>
-          </div>
-          <div className="sig-block">
-            <span>Принял (Покупатель): ___________________</span>
-          </div>
+          <div className="sig-block"><span>Выдал (Поставщик): ___________________</span></div>
+          <div className="sig-block"><span>Принял (Покупатель): ___________________</span></div>
         </footer>
       </div>
     </div>
   );
-};
+}

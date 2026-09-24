@@ -59,3 +59,22 @@ export async function downloadXlsx() {
 
   return response.blob();
 }
+
+export async function downloadReport({ type, fileType, from, to, columns }) {
+  const params = new URLSearchParams({
+    type,
+    from,
+    to,
+    columns: columns.join(','),
+  });
+
+  const response = await fetch(
+    `${API_URL}/api/v1/exports/report.${fileType}?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Ошибка: ${response.status}`);
+  }
+
+  return response.blob();
+}

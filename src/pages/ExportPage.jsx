@@ -1,4 +1,32 @@
 import { useState } from 'react';
+import { downloadReport } from "../api/api";
+
+const COLUMNS_BY_TYPE = {
+  sales: [
+    { value: 'id', label: 'ID продажи' },
+    { value: 'client', label: 'Клиент' },
+    { value: 'date', label: 'Дата продажи' },
+    { value: 'amount', label: 'Сумма продажи' },
+    { value: 'status', label: 'Статус оплаты' },
+    { value: 'manager', label: 'Менеджер' },
+    { value: 'vat', label: 'НДС' },
+  ],
+  debts: [
+    { value: 'id', label: 'ID клиента / счёта' },
+    { value: 'client', label: 'Клиент' },
+    { value: 'total_debt', label: 'Сумма долга' },
+    { value: 'due_date', label: 'Срок оплаты' },
+    { value: 'days_overdue', label: 'Дней просрочки' },
+    { value: 'aging_bucket', label: 'Интервал просрочки' },
+    { value: 'last_payment_date', label: 'Дата последней оплаты' },
+    { value: 'manager', label: 'Менеджер' },
+    { value: 'status', label: 'Статус задолженности' },
+  ],
+};
+
+function getDefaultColumns(type) {
+  return COLUMNS_BY_TYPE[type].slice(0, 4).map((column) => column.value);
+}
 
 export default function ExportPage() {
   const [exportType, setExportType] = useState('sales');
@@ -7,25 +35,17 @@ export default function ExportPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const [columns, setColumns] = useState([
-    'id',
-    'client',
-    'date',
-    'amount'
-  ]);
+  const [columns, setColumns] = useState(() => getDefaultColumns('sales'));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const availableColumns = [
-    { value: 'id', label: 'ID' },
-    { value: 'client', label: 'Клиент' },
-    { value: 'date', label: 'Дата' },
-    { value: 'amount', label: 'Сумма' },
-    { value: 'status', label: 'Статус' },
-    { value: 'manager', label: 'Менеджер' },
-    { value: 'vat', label: 'НДС' }
-  ];
+  const availableColumns = COLUMNS_BY_TYPE[exportType];
+
+  function handleTypeChange(type) {
+    setExportType(type);
+    setColumns(getDefaultColumns(type));
+  }
 
   function toggleColumn(column) {
     if (columns.includes(column)) {
@@ -40,34 +60,20 @@ export default function ExportPage() {
       setLoading(true);
       setError('');
 
-      const params = new URLSearchParams({
+      // 1. Вызываем функцию из api.js с данными из формы
+      const blob = await downloadReport({
         type: exportType,
+        fileType: fileType,
         from: dateFrom,
         to: dateTo,
-        columns: columns.join(',')
+        columns: columns
       });
 
-      const response = await fetch(
-        fileType === 'csv'
-          ? `/api/v1/exports/report.csv?${params}`
-          : `/api/v1/exports/report.xlsx?${params}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Ошибка: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-
+      // 2. Скачиваем полученный файл
       const url = window.URL.createObjectURL(blob);
-
       const link = document.createElement('a');
       link.href = url;
-
-      link.download =
-        fileType === 'csv'
-          ? 'report.csv'
-          : 'report.xlsx';
+      link.download = `report_${exportType}.${fileType}`;
 
       document.body.appendChild(link);
       link.click();
@@ -76,7 +82,7 @@ export default function ExportPage() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      setError(err.message || 'Ошибка при экспорте файла');
     } finally {
       setLoading(false);
     }
@@ -91,11 +97,10 @@ export default function ExportPage() {
           Тип данных:
           <select
             value={exportType}
-            onChange={(e) => setExportType(e.target.value)}
+            onChange={(e) => handleTypeChange(e.target.value)}
           >
             <option value="sales">Продажи</option>
             <option value="debts">Задолженности</option>
-            <option value="documents">Документы</option>
           </select>
         </label>
       </div>
@@ -123,19 +128,41 @@ export default function ExportPage() {
       <div style={{ marginBottom: '15px' }}>
         <h4>Колонки для экспорта</h4>
 
-        {availableColumns.map((column) => (
-          <div key={column.value}>
-            <label>
+        <div
+          style={{
+            display: 'grid',
+            gap: '8px',
+            width: 'fit-content',
+            margin: '0 auto',
+            textAlign: 'left',
+          }}
+        >
+          {availableColumns.map((column) => (
+            <label
+              key={column.value}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                minHeight: '24px',
+                cursor: 'pointer',
+              }}
+            >
               <input
                 type="checkbox"
                 checked={columns.includes(column.value)}
                 onChange={() => toggleColumn(column.value)}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  flex: '0 0 16px',
+                  margin: 0,
+                }}
               />
-              {' '}
               {column.label}
             </label>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div style={{ marginBottom: '15px' }}>
