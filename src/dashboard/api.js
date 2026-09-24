@@ -65,7 +65,7 @@ export async function loadDashboardData() {
     ["summary", "/dashboard/summary", (data) => data],
     ["aging", "/reports/aging", (data) => data.overdueInvoices || data],
     ["orders", "/orders?status=pending", (data) => Array.isArray(data) ? data : data.orders || []],
-    ["routes", "/routes?status=active", (data) => Array.isArray(data) ? data : data.routes || []],
+    ["routes", "/routes", (data) => Array.isArray(data) ? data : data.routes || []],
     ["products", "/products?limit=10", (data) => Array.isArray(data) ? data : data.products || []],
   ];
 
