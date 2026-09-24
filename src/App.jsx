@@ -1,30 +1,24 @@
-// src/App.jsx
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
+
+// Модуль Алексея
+import SupplierDashboard from './SupplierDashboard'; 
+
+// Твои компоненты (если путь отличается, скорректируй его)
 import ClientsTable from './components/ClientsTable';
-import ClientDetails from './components/ClientDetails'; // Импортируем новый компонент
 
-function App() {
-  const [selectedClient, setSelectedClient] = useState(null);
-
+export default function App() {
   return (
-    <div>
-      <header style={{ backgroundColor: '#333', color: 'white', padding: '10px 20px' }}>
-        <h1>W4 Back-Office: Балансы и Поступления</h1>
-      </header>
-
-      <main>
-        {!selectedClient ? (
-          <ClientsTable onSelectClient={(client) => setSelectedClient(client)} />
-        ) : (
-          /* Используем новый компонент ClientDetails */
-          <ClientDetails 
-            client={selectedClient} 
-            onBack={() => setSelectedClient(null)} 
-          />
-        )}
-      </main>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          {/* Главная страница — Дашборд Алексея */}
+          <Route index element={<SupplierDashboard />} />
+          
+          {/* Страница клиентов — Твоя таблица */}
+          <Route path="clients" element={<ClientsTable />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;
