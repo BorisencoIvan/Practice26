@@ -9,7 +9,8 @@ export default defineConfig({
       '/api': {
         target: 'https://column-philadelphia-jason-depending.trycloudflare.com/',
         changeOrigin: true,
-      }
-    }
-  }
+        secure: true,
+      },
+    },
+  },
 })
