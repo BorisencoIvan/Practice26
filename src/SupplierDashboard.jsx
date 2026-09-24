@@ -67,6 +67,17 @@ export default function SupplierDashboard() {
     () => [...productsData].sort((a, b) => b.value - a.value).slice(0, 10),
     [productsData]
   );
+  const averagePendingOrdersPerDay = useMemo(() => {
+    if (!ordersData.length) return "—";
+
+    const maxAge = ordersData.reduce(
+      (max, order) => Math.max(max, Number(order.days) || 0),
+      0
+    );
+
+    const daysWindow = Math.max(1, maxAge + 1);
+    return (ordersData.length / daysWindow).toFixed(1);
+  }, [ordersData]);
   const toggleKpi = (key) => setSelectedKpi((current) => (current === key ? null : key));
 
   return (
@@ -103,7 +114,7 @@ export default function SupplierDashboard() {
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", marginBottom: "32px" }}>
           <KpiCard accent={T.amber} icon={<TrendingUp size={16} />} title="ПРОДАЖИ" primary={fmtMDL(summaryData.todaySales)} secondary={{ label: "за месяц", value: fmtMDL(summaryData.monthSales) }} delta={summaryData.salesDelta} deltaLabel="к прошлому месяцу" />
-          <KpiCard accent={T.inkSoft} icon={<Clock size={16} />} title="ЗАКАЗЫ В ОЖИДАНИИ" primary={summaryData.pendingOrders} secondary={{ label: "среднее / день", value: "—" }} onClick={() => toggleKpi("orders")} active={selectedKpi === "orders"} />
+          <KpiCard accent={T.inkSoft} icon={<Clock size={16} />} title="ЗАКАЗЫ В ОЖИДАНИИ" primary={summaryData.pendingOrders} secondary={{ label: "среднее / день", value: averagePendingOrdersPerDay }} onClick={() => toggleKpi("orders")} active={selectedKpi === "orders"} />
           <KpiCard accent={T.teal} icon={<RouteIcon size={16} />} title="АКТИВНЫЕ МАРШРУТЫ" primary={summaryData.activeRoutes} secondary={{ label: "Маршруты на линии", value: routesData.length }} onClick={() => toggleKpi("routes")} active={selectedKpi === "routes"} />
           <KpiCard accent={T.rust} icon={<Wallet size={16} />} title="ОБЩАЯ СУММА К ПОЛУЧЕНИЮ" primary={fmtMDL(summaryData.totalReceivable)} secondary={{ label: "просроченные счета", value: agingData.length }} onClick={() => toggleKpi("receivable")} active={selectedKpi === "receivable"} />
         </section>
