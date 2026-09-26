@@ -41,52 +41,46 @@ export default function ClientsTable({ onSelectClient }) {
     setSortConfig({ key, direction });
   };
 
-  if (loading) return <div style={{ padding: '20px' }}>Загрузка клиентов...</div>;
-  if (error) return <div style={{ padding: '20px', color: 'red' }}>Ошибка: {error}</div>;
+  if (loading) return <div className="page-shell">Загрузка клиентов...</div>;
+  if (error) return <div className="page-shell form-error">Ошибка: {error}</div>;
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h2>Таблица клиентов (Tabel de clienți)</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+    <div className="page-shell">
+      <header className="page-header"><h1>Клиенты</h1><span className="page-date">Баланс и задолженность</span></header>
+      <div className="surface table-wrap"><table className="data-table">
         <thead>
-          <tr style={{ backgroundColor: '#f4f4f4', borderBottom: '2px solid #ddd' }}>
-            <th style={{ padding: '10px', cursor: 'pointer' }} onClick={() => handleSort('name')}>
+            <tr><th className="sortable" onClick={() => handleSort('name')}>
               Клиент {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
             </th>
-            <th style={{ padding: '10px', cursor: 'pointer' }} onClick={() => handleSort('balance')}>
+            <th className="sortable" onClick={() => handleSort('balance')}>
               Баланс / Долг {sortConfig.key === 'balance' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
             </th>
-            <th style={{ padding: '10px', cursor: 'pointer' }} onClick={() => handleSort('maxDebtAge')}>
+            <th className="sortable" onClick={() => handleSort('maxDebtAge')}>
               Возраст долга {sortConfig.key === 'maxDebtAge' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
             </th>
-            <th style={{ padding: '10px' }}>Действия</th>
+            <th>Действия</th>
           </tr>
         </thead>
         <tbody>
           {clients.map((client) => {
             const isCriticalDebt = client.maxDebtAge > 60;
             return (
-              <tr key={client.id} style={{ 
-                borderBottom: '1px solid #ddd',
-                backgroundColor: isCriticalDebt ? '#ffebeb' : 'transparent',
-                color: isCriticalDebt ? '#d32f2f' : 'inherit'
-              }}>
-                <td style={{ padding: '10px' }}>
+              <tr key={client.id} className={isCriticalDebt ? 'is-critical' : ''}>
+                <td>
                   {client.name} 
                   {isCriticalDebt && <span style={{ marginLeft: '10px', fontWeight: 'bold' }}>⚠️</span>}
                 </td>
-                <td style={{ padding: '10px' }}>{client.balance} MDL</td>
-                <td style={{ padding: '10px' }}>{client.maxDebtAge} дней</td>
-                <td style={{ padding: '10px' }}>
-                  <button onClick={() => onSelectClient(client)} style={{ padding: '5px 10px', cursor: 'pointer' }}>
-                    Детали (Detaliu)
+                <td>{client.balance} MDL</td>
+                <td>{client.maxDebtAge} дней</td>
+                <td><button className="button-secondary" onClick={() => onSelectClient(client)}>
+                    Детали
                   </button>
                 </td>
               </tr>
             );
           })}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }

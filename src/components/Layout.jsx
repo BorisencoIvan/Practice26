@@ -1,19 +1,32 @@
-import { Outlet, Link } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
+import { Boxes, FileText, LayoutGrid, Users } from 'lucide-react';
+import { T } from '../dashboard/constants';
 
 export default function Layout() {
+  const navigation = [
+    { to: '/', label: 'Общая панель', icon: LayoutGrid, end: true },
+    { to: '/clients', label: 'Клиенты', icon: Users },
+    { to: '/documents', label: 'Документы', icon: FileText },
+    { to: '/export', label: 'Экспорт', icon: Boxes },
+  ];
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <nav style={{ width: '250px', backgroundColor: '#2c3e50', color: 'white', padding: '20px' }}>
-        <h2>W4 Back-Office</h2>
-        <ul style={{ listStyle: 'none', padding: 0, marginTop: '30px' }}>
-              <li style={{ marginBottom: '15px' }}><Link to="/" style={{ color: 'white', textDecoration: 'none' }}>📊 Дашборд</Link></li>
-              <li style={{ marginBottom: '15px' }}><Link to="/clients" style={{ color: 'white', textDecoration: 'none' }}>👥 Клиенты и Сальдо</Link></li>
-              <li style={{ marginBottom: '15px' }}><Link to="/documents" style={{ color: 'white', textDecoration: 'none' }}>📄 Документы</Link></li>
-              <li style={{ marginBottom: '15px' }}><Link to="/export" style={{ color: 'white', textDecoration: 'none' }}>💾 Экспорт</Link></li>
-          </ul>
-      </nav>
-      <main style={{ flex: 1, padding: '20px', backgroundColor: '#f5f6fa', overflowY: 'auto' }}>
-        {/* Сюда будут подгружаться ваши компоненты */}
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <div>
+          <div className="sidebar-brand">Поставщик</div>
+          <nav className="sidebar-nav" aria-label="Основная навигация">
+            {navigation.map(({ to, label, icon: Icon, end }) => (
+              <NavLink key={to} to={to} end={end} className={({ isActive }) => `sidebar-link${isActive ? ' is-active' : ''}`}>
+                <Icon size={16} />
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+        <div className="sidebar-footer" style={{ color: T.textMuted }}>W4 Back-Office</div>
+      </aside>
+      <main className="app-content">
         <Outlet />
       </main>
     </div>

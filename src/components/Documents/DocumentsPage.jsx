@@ -53,15 +53,15 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h2>Документы</h2>
+    <div className="page-shell">
+      <header className="page-header"><h1>Документы</h1><span className="page-date">Счета-фактуры</span></header>
 
       {loading && (
         <p>Загрузка документов...</p>
       )}
 
       {error && (
-        <p style={{ color: 'red' }}>
+        <p className="form-error">
           Ошибка: {error}
         </p>
       )}
@@ -70,49 +70,26 @@ export default function DocumentsPage() {
         <p>Документы не найдены</p>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          gap: '20px',
-          alignItems: 'flex-start',
-        }}
-      >
+      <div className="documents-layout">
         {/* Список документов */}
-        <div
-          style={{
-            width: '300px',
-            flexShrink: 0,
-          }}
-        >
+        <div className="documents-list surface">
           {documents.map((doc) => (
             <div
               key={doc.id}
               onClick={() => handleSelect(doc)}
-              style={{
-                cursor: 'pointer',
-                padding: '12px',
-                border: '1px solid #ccc',
-                marginBottom: '8px',
-                borderRadius: '5px',
-                background:
-                  selectedInvoice?.id === doc.id
-                    ? '#eaf2ff'
-                    : '#fff',
-              }}
+              className={`document-item${selectedInvoice?.id === doc.id ? ' is-selected' : ''}`}
             >
               <strong>
                 {doc.serie || 'INV'}-{doc.number}
               </strong>
 
-              <div>
-                ID: {doc.id}
-              </div>
+              <div className="muted-text">ID: {doc.id}</div>
             </div>
           ))}
         </div>
 
         {/* Просмотр счёта */}
-        <div style={{ flex: 1 }}>
+        <div className="document-preview">
           {loadingInvoice && (
             <p>Загрузка счёта...</p>
           )}

@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://column-philadelphia-jason-depending.trycloudflare.com/',
+        target: 'https://hopes-drivers-educated-whom.trycloudflare.com/',
         changeOrigin: true,
         secure: true,
       },

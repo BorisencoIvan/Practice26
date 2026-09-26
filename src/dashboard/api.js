@@ -51,6 +51,11 @@ export function friendlyErrorMessage(errors) {
   return unique.join(" | ");
 }
 
+export async function getRoutes() {
+  const data = await apiFetch("/routes");
+  return Array.isArray(data) ? data : data.routes || [];
+}
+
 export async function loadDashboardData() {
   const errors = [];
   const result = {
@@ -65,14 +70,17 @@ export async function loadDashboardData() {
     ["summary", "/dashboard/summary", (data) => data],
     ["aging", "/reports/aging", (data) => data.overdueInvoices || data],
     ["orders", "/orders?status=pending", (data) => Array.isArray(data) ? data : data.orders || []],
-    ["routes", "/routes", (data) => Array.isArray(data) ? data : data.routes || []],
+    ["routes", getRoutes],
     ["products", "/products?limit=10", (data) => Array.isArray(data) ? data : data.products || []],
   ];
 
   await Promise.all(
-    requests.map(async ([key, path, select]) => {
+    requests.map(async ([key, pathOrLoader, select]) => {
       try {
-        result[key] = select(await apiFetch(path));
+        const data = typeof pathOrLoader === "function"
+          ? await pathOrLoader()
+          : await apiFetch(pathOrLoader);
+        result[key] = select ? select(data) : data;
       } catch (error) {
         errors.push(error);
       }

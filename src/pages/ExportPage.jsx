@@ -89,12 +89,13 @@ export default function ExportPage() {
   }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h2>Экспорт данных</h2>
+    <div className="page-shell">
+      <header className="page-header"><h1>Экспорт данных</h1><span className="page-date">Формирование отчёта</span></header>
 
-      <div style={{ marginBottom: '15px' }}>
-        <label>
-          Тип данных:
+      <section className="surface form-panel">
+        <div className="form-grid">
+        <label className="form-field">
+          <span>Тип данных</span>
           <select
             value={exportType}
             onChange={(e) => handleTypeChange(e.target.value)}
@@ -103,30 +104,31 @@ export default function ExportPage() {
             <option value="debts">Задолженности</option>
           </select>
         </label>
-      </div>
 
-      <div style={{ marginBottom: '15px' }}>
-        <label>
-          Дата от:
+        <label className="form-field"><span>Дата от</span>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
         </label>
-
-        <label style={{ marginLeft: '20px' }}>
-          Дата до:
+        <label className="form-field"><span>Дата до</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
         </label>
-      </div>
 
-      <div style={{ marginBottom: '15px' }}>
-        <h4>Колонки для экспорта</h4>
+        <label className="form-field"><span>Формат файла</span>
+          <select value={fileType} onChange={(e) => setFileType(e.target.value)}>
+            <option value="csv">CSV</option>
+            <option value="xlsx">XLSX</option>
+          </select>
+        </label>
+        </div>
+
+        <div className="columns-panel"><h3>Колонки для экспорта</h3>
 
         <div
           style={{
@@ -140,56 +142,32 @@ export default function ExportPage() {
           {availableColumns.map((column) => (
             <label
               key={column.value}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                minHeight: '24px',
-                cursor: 'pointer',
-              }}
+              className="checkbox-row"
             >
               <input
                 type="checkbox"
                 checked={columns.includes(column.value)}
                 onChange={() => toggleColumn(column.value)}
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  flex: '0 0 16px',
-                  margin: 0,
-                }}
               />
               {column.label}
             </label>
           ))}
         </div>
-      </div>
-
-      <div style={{ marginBottom: '15px' }}>
-        <label>
-          Формат файла:
-          <select
-            value={fileType}
-            onChange={(e) => setFileType(e.target.value)}
-          >
-            <option value="csv">CSV</option>
-            <option value="xlsx">XLSX</option>
-          </select>
-        </label>
-      </div>
+        </div>
 
       {error && (
-        <p style={{ color: 'red' }}>
+        <p className="form-error">
           Ошибка: {error}
         </p>
       )}
 
       <button
+        className="button-primary export-button"
         onClick={handleExport}
         disabled={loading}
       >
         {loading ? 'Подготовка файла...' : 'Скачать файл'}
-      </button>
+      </button></section>
     </div>
   );
 }

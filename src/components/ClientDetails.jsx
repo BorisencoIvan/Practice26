@@ -41,85 +41,68 @@ export default function ClientDetails({ client, onBack }) {
         setInvoices(data.invoices || []);
         setHistory(data.paymentHistory || []);
         setLoading(false);
-    } catch(err) {
+    } catch {
         console.error("Ошибка обновления после оплаты");
     }
   };
 
-  if (loading) return <div style={{ padding: '20px' }}>Загрузка профиля...</div>;
-  if (error) return <div style={{ padding: '20px', color: 'red' }}>Ошибка: {error}</div>;
+  if (loading) return <div className="page-shell">Загрузка профиля...</div>;
+  if (error) return <div className="page-shell form-error">Ошибка: {error}</div>;
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <button onClick={onBack} style={{ padding: '8px 16px', marginBottom: '20px', cursor: 'pointer' }}>
+    <div className="page-shell">
+      <button onClick={onBack} className="button-secondary back-button">
         ← Вернуться к списку клиентов
       </button>
 
-      <h2>Профиль клиента: {client.name}</h2>
+      <header className="page-header"><h1>Профиль клиента: {client.name}</h1><span className="page-date">Баланс клиента</span></header>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px' }}>
+      <div className="surface client-summary">
         <div>
           <p><strong>Общий долг:</strong> {client.balance} MDL</p>
           <p><strong>Максимальная просрочка:</strong> {client.maxDebtAge} дней</p>
         </div>
         <div>
-          <button 
+          <button className="button-primary"
             onClick={() => setIsPaymentModalOpen(true)}
-            style={{ backgroundColor: '#4CAF50', color: 'white', padding: '12px 24px', border: 'none', borderRadius: '4px', fontSize: '16px', cursor: 'pointer' }}
           >
-            💰 Внести оплату (Înregistrare încasare)
+            Внести оплату
           </button>
         </div>
       </div>
 
-      <h3>Неоплаченные счета (Facturi neachitate)</h3>
+      <h3>Неоплаченные счета</h3>
       {invoices.length > 0 ? (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '40px' }}>
+        <div className="surface table-wrap"><table className="data-table">
           <thead>
-            <tr style={{ backgroundColor: '#f4f4f4', borderBottom: '2px solid #ddd' }}>
-              <th style={{ padding: '10px' }}>Документ</th>
-              <th style={{ padding: '10px' }}>Сумма счета</th>
-              <th style={{ padding: '10px' }}>Оплачено ранее</th>
-              <th style={{ padding: '10px' }}>Остаток к оплате</th>
-              <th style={{ padding: '10px' }}>Срок (Due Date)</th>
+            <tr><th>Документ</th><th>Сумма счета</th><th>Оплачено ранее</th><th>Остаток к оплате</th><th>Срок оплаты</th>
             </tr>
           </thead>
           <tbody>
             {invoices.map((inv) => (
-              <tr key={inv.id} style={{ borderBottom: '1px solid #ddd' }}>
-                <td style={{ padding: '10px' }}>{inv.serie}-{inv.number}</td>
-                <td style={{ padding: '10px' }}>{inv.total} MDL</td>
-                <td style={{ padding: '10px' }}>{inv.paid} MDL</td>
-                <td style={{ padding: '10px', fontWeight: 'bold' }}>{inv.total - inv.paid} MDL</td>
-                <td style={{ padding: '10px' }}>{new Date(inv.due_at).toLocaleDateString()}</td>
+              <tr key={inv.id}><td>{inv.serie}-{inv.number}</td><td>{inv.total} MDL</td><td>{inv.paid} MDL</td><td><strong>{inv.total - inv.paid} MDL</strong></td><td>{new Date(inv.due_at).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       ) : (
         <p style={{ color: '#666', marginBottom: '40px' }}>У этого клиента нет неоплаченных счетов.</p>
       )}
 
-      <h3>История платежей (Istoric de plăți)</h3>
+      <h3>История платежей</h3>
       {history.length > 0 ? (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="surface table-wrap"><table className="data-table">
           <thead>
-            <tr style={{ backgroundColor: '#f4f4f4', borderBottom: '2px solid #ddd' }}>
-              <th style={{ padding: '10px' }}>Номер квитанции</th>
-              <th style={{ padding: '10px' }}>Сумма оплаты</th>
-              <th style={{ padding: '10px' }}>Дата и время</th>
+            <tr><th>Номер квитанции</th><th>Сумма оплаты</th><th>Дата и время</th>
             </tr>
           </thead>
           <tbody>
             {history.map((pay) => (
-              <tr key={pay.id} style={{ borderBottom: '1px solid #ddd' }}>
-                <td style={{ padding: '10px' }}>{pay.receiptNumber}</td>
-                <td style={{ padding: '10px', color: 'green', fontWeight: 'bold' }}>+{pay.amount} MDL</td>
-                <td style={{ padding: '10px' }}>{new Date(pay.date).toLocaleString()}</td>
+              <tr key={pay.id}><td>{pay.receiptNumber}</td><td className="positive-value">+{pay.amount} MDL</td><td>{new Date(pay.date).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       ) : (
         <p style={{ color: '#666' }}>История платежей пуста.</p>
       )}

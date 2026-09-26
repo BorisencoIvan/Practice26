@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  LayoutGrid,
-  Users,
-  Boxes,
-  Route as RouteIcon,
-  Wallet,
-  Clock,
-  TrendingUp,
-} from "lucide-react";
+import { Route as RouteIcon, Wallet, Clock, TrendingUp } from "lucide-react";
 import { EMPTY_SUMMARY, T } from "./dashboard/constants";
 import { friendlyErrorMessage, loadDashboardData } from "./dashboard/api";
 import { fmtMDL, normalizeOrders, normalizeProducts, normalizeSalesSeries } from "./dashboard/utils";
@@ -89,28 +81,8 @@ export default function SupplierDashboard() {
   const toggleKpi = (key) => setSelectedKpi((current) => (current === key ? null : key));
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", width: "100%", background: T.paper, fontFamily: "'IBM Plex Sans', system-ui, -apple-system, sans-serif" }}>
-      <aside style={{ width: "220px", background: T.ink, color: T.paper, padding: "24px 16px", display: "flex", flexDirection: "column", justifyContent: "space-between", flexShrink: 0 }}>
-        <div>
-          <div style={{ fontSize: "16px", fontWeight: 600, marginBottom: "32px", paddingLeft: "8px" }}>Поставщик</div>
-          <nav style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            {[
-              { icon: <LayoutGrid size={16} />, label: "Общий панель", active: true },
-              { icon: <Users size={16} />, label: "Клиенты" },
-              { icon: <Boxes size={16} />, label: "Товары" },
-              { icon: <RouteIcon size={16} />, label: "Маршруты" },
-              { icon: <Wallet size={16} />, label: "Платежи" },
-            ].map((item) => (
-              <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", fontSize: "13px", color: item.active ? T.paper : "#8B94A3", background: item.active ? "#1E2530" : "transparent", borderLeft: item.active ? `3px solid ${T.amber}` : "3px solid transparent", cursor: "pointer" }}>
-                {item.icon}
-                {item.label}
-              </div>
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      <main style={{ flex: 1, padding: "32px 40px", minWidth: 0 }}>
+    <div className="dashboard-page">
+      <main>
         <header style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "32px" }}>
           <h1 style={{ fontSize: "24px", fontWeight: 600, color: T.ink, margin: 0 }}>Панель управления поставщика</h1>
           <div style={{ fontSize: "12px", padding: "6px 12px", border: `1px solid ${T.line}`, color: T.textMuted }}>

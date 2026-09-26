@@ -90,14 +90,11 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
   };
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center'
-    }}>
-      <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', width: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div className="modal-backdrop">
+      <div className="payment-modal surface">
         <h2>Регистрация оплаты: {client.name}</h2>
         
-        <div style={{ backgroundColor: '#eef', padding: '15px', borderRadius: '5px', marginBottom: '20px' }}>
+        <div className="payment-summary">
           <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>
             Общая сумма к распределению (MDL):
           </label>
@@ -112,7 +109,7 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
             <span style={{ color: remainingToAllocate === 0 && totalPayment > 0 ? 'green' : 'red', fontWeight: 'bold' }}>
               Остаток для распределения: {remainingToAllocate} MDL
             </span>
-            <button 
+            <button className="button-secondary"
               onClick={handleAutoAllocate}
               disabled={!totalPayment || totalPayment <= 0}
               style={{ padding: '5px 10px', cursor: 'pointer' }}
@@ -129,7 +126,7 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
           const currentAlloc = allocations[invId] || '';
           
           return (
-            <div key={invId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #ccc' }}>
+            <div key={invId} className="allocation-row">
               <div>
                 <strong>{inv.serie}-{inv.number}</strong> (Долг: {debt} MDL)
                 <br/>
@@ -149,21 +146,17 @@ export default function PaymentModal({ client, invoices, onClose, onSubmit }) {
         })}
 
         {apiError && (
-          <div style={{ color: 'red', marginTop: '15px', fontWeight: 'bold' }}>
+          <div className="form-error modal-error">
             Ошибка: {apiError}
           </div>
         )}
 
         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button onClick={onClose} disabled={isSubmitting} style={{ padding: '10px 20px', cursor: 'pointer' }}>Отмена</button>
+          <button className="button-secondary" onClick={onClose} disabled={isSubmitting}>Отмена</button>
           <button 
             onClick={handleSave} 
             disabled={!totalPayment || totalPayment <= 0 || remainingToAllocate !== 0 || isSubmitting}
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: (!totalPayment || totalPayment <= 0 || remainingToAllocate !== 0 || isSubmitting) ? '#999' : '#4CAF50', 
-              color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' 
-            }}
+            className="button-primary"
           >
             {isSubmitting ? 'Сохранение...' : 'Сохранить оплату'}
           </button>
