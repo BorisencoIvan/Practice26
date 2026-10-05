@@ -1,16 +1,47 @@
-# React + Vite
+# 📊 Система управления продажами и счетами 
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Простое и удобное веб-приложение для работы с клиентами, выставления счетов, проведения платежей и отслеживания финансовых показателей.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Что умеет приложение?
 
-## React Compiler
+* **📈 Главный экран (Дашборд):** Наглядные графики продаж, топ-товары и основные финансовые показатели компании.
+* **👥 База клиентов:** Удобная таблица со всеми клиентами, их контактами и историей заказов.
+* **📄 Счета и документы:** Создание счетов, автоматический перевод суммы в слова (прописью) и быстрая выгрузка файлов.
+* **📥 Экспорт данных:** Скачивание счетов и отчетов в форматах **PDF** и **Excel**.
+* **💳 Учет платежей:** Всплывающее окно для быстрого внесения и подтверждения оплаты.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 🛠 Из чего сделан проект (Технологии)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+* **React 19 + Vite** — современная и очень быстрая основа приложения.
+* **React Router v7** — отвечает за переключение между страницами.
+* **Recharts** — отвечает за графики.
+* **React-PDF & xlsx-js-style** — создают документы PDF и стилизованные таблицы Excel.
+
+---
+
+## 💻 Как запустить проект у себя на компьютере
+
+Для работы вам понадобится установленный [Node.js](https://nodejs.org/).
+
+1. **Скачайте или клонируйте проект** на свой компьютер.
+2. **Откройте папку с проектом в терминале** и установите все необходимые библиотеки:
+   ```bash
+   npm install
+   ```
+3. **Запустите приложение:**
+   ```bash
+   npm run dev
+   ```
+4. **Перейдите в браузер:** Терминал покажет ссылку (обычно это `http://localhost:5173`), откройте её.
+
+---
+
+## ⚙️ Полезные команды
+
+* `npm run dev` — запуск проекта для разработки.
+* `npm run build` — сборка проекта для публикации на сервере.
+* `npm run lint` — проверка кода на ошибки.
